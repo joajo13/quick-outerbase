@@ -7,7 +7,10 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STUDIO="$(cd "$HERE/.." && pwd)"
 BUNDLE="${1:-/tmp/sa.tgz}"
 PORT="${PORT:-3012}"
-WORK="$STUDIO/.launcher-test"
+# IMPORTANTE: WORK va AFUERA de db-studio. Si estuviera adentro, Node resolvería
+# módulos faltantes del bundle (ej. el nativo de libsql) subiendo el árbol hasta
+# db-studio/node_modules → falso verde. mktemp -d cae en el temp del SO.
+WORK="$(mktemp -d)/qob-launcher-test"
 PASS=0; FAIL=0
 ok(){ echo "[PASS] $1"; PASS=$((PASS+1)); }
 bad(){ echo "[FAIL] $1"; FAIL=$((FAIL+1)); }

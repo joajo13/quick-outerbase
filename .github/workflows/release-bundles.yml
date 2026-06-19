@@ -58,6 +58,18 @@ jobs:
           cp -r .next/static .next/standalone/.next/static
           cp -r public .next/standalone/public
           cp LICENSE AVISO_LICENCIA.md .next/standalone/ 2>/dev/null || true
+          # El tracer de Next (nft) NO sigue requires dinámicos como
+          # `require(`@libsql/${target}`)`, así que el binario nativo de libsql
+          # queda fuera del standalone. Lo copiamos a mano (sino SQLite/libsql
+          # rompe con "Cannot find module '@libsql/<plat>'"). Idem el paquete
+          # `libsql` por las dudas.
+          mkdir -p .next/standalone/node_modules/@libsql
+          cp -r node_modules/@libsql/. .next/standalone/node_modules/@libsql/
+          if [ -d node_modules/libsql ]; then
+            mkdir -p .next/standalone/node_modules/libsql
+            cp -r node_modules/libsql/. .next/standalone/node_modules/libsql/
+          fi
+          echo "@libsql en el bundle:" && ls .next/standalone/node_modules/@libsql
           tar -czf "quick-outerbase-${{ matrix.target }}.tar.gz" -C .next/standalone .
           ls -lh "quick-outerbase-${{ matrix.target }}.tar.gz"
 
