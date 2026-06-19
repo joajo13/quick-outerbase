@@ -56,4 +56,6 @@ certificates
 verify-sqlite.db
 dist-verify*.db
 /.dist-verify
+/.launcher-test
+launcher/_bundle.tar.gz
 .playwright-mcp

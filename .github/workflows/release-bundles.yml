@@ -1,0 +1,69 @@
+name: release-bundles
+
+# Buildea el runtime `standalone` precompilado por plataforma y lo sube como
+# asset del Release. El launcher npm (`quick-outerbase`) baja el asset que
+# matchea la plataforma del usuario. Disparar pusheando un tag `vX.Y.Z`.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag del release (ej: v0.10.2)"
+        required: true
+
+permissions:
+  contents: write # para crear/actualizar el Release y subir assets
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-x64
+          - os: windows-latest
+            target: win32-x64
+          - os: macos-14
+            target: darwin-arm64
+          - os: macos-13
+            target: darwin-x64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      # --ignore-scripts: salteamos el `prepare` (que buildea FORK_LOCAL=1, NO
+      # standalone). El bundle necesita el build standalone, que corremos aparte.
+      - name: Install deps (sin prepare)
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      # Sin FORK_LOCAL ⇒ next.config usa output:'standalone'.
+      - name: Build standalone
+        run: npx next build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+
+      # Armar el layout que espera `node server.js` (igual que el Dockerfile).
+      - name: Ensamblar bundle
+        shell: bash
+        run: |
+          cp -r .next/static .next/standalone/.next/static
+          cp -r public .next/standalone/public
+          cp LICENSE AVISO_LICENCIA.md .next/standalone/ 2>/dev/null || true
+          tar -czf "quick-outerbase-${{ matrix.target }}.tar.gz" -C .next/standalone .
+          ls -lh "quick-outerbase-${{ matrix.target }}.tar.gz"
+
+      - name: Subir asset al Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          files: quick-outerbase-${{ matrix.target }}.tar.gz
+          fail_on_unmatched_files: true

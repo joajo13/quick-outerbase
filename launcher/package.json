@@ -1,0 +1,24 @@
+{
+  "name": "quick-outerbase",
+  "version": "0.10.2",
+  "description": "Launcher de quick-outerbase: baja un runtime precompilado y levanta una UI web local para tu DATABASE_URL (postgres/mysql/sqlite/libsql) en segundos. Fork de Outerbase Studio (AGPL-3.0).",
+  "license": "AGPL-3.0-only",
+  "bin": {
+    "quick-outerbase": "launcher.mjs"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "files": [
+    "launcher.mjs",
+    "AVISO_LICENCIA.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/joajo13/quick-outerbase.git"
+  },
+  "homepage": "https://github.com/joajo13/quick-outerbase#readme",
+  "keywords": ["database", "studio", "postgres", "mysql", "sqlite", "libsql", "prisma-studio", "gui"]
+}

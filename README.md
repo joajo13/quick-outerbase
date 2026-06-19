@@ -9,21 +9,35 @@ Fork de [Outerbase Studio](https://github.com/outerbase/studio), bajo **AGPL-3.0
 
 ---
 
-## Instalación y uso — directo desde GitHub con `npx`
+## Instalación rápida (recomendada) — `npx quick-outerbase`
 
-No hace falta clonar nada a mano. Necesitás **Node 20+** y npm:
+Necesitás **Node 20.9+**:
+
+```bash
+npx quick-outerbase --url "postgresql://user:pass@host:5432/midb?schema=public"
+```
+
+Esto baja **una sola vez** un runtime precompilado (`standalone`, ~28 MB) para tu plataforma
+desde GitHub Releases, lo cachea y arranca **en segundos** (no compila nada en tu máquina).
+Abre el browser en `http://localhost:3008/env`. Al cortar con **Ctrl+C** libera el puerto sin
+zombies. Runs siguientes: instantáneos (cacheado en `~/.cache/quick-outerbase`).
+
+> Plataformas con bundle precompilado: `win32-x64`, `linux-x64`, `darwin-arm64`, `darwin-x64`.
+> El paquete `quick-outerbase` es un **launcher fino** (sin dependencias); el código fuente
+> completo vive en este repo (se buildea por plataforma en cada release, ver [Releases](#releasing)).
+
+## Alternativa — desde el código con `npx github:` (dev / plataformas sin bundle)
+
+Si querés correr **desde el código** (hackear, o una plataforma sin bundle precompilado):
 
 ```bash
 npx -y github:joajo13/quick-outerbase --url "postgresql://user:pass@host:5432/midb?schema=public"
 ```
 
-`npx` clona el repo a un cache temporal, corre `npm install` (que dispara el build de
-producción en el lifecycle `prepare`) y arranca la app apuntada a tu `DATABASE_URL`,
-abriendo el browser en `http://localhost:3008/env`. Al cortar con **Ctrl+C** hace teardown
-limpio: mata el árbol de procesos y libera el puerto, sin zombies.
-
-> La primera vez tarda (instala dependencias y compila el build de producción). `npx`
-> cachea el resultado por commit, así que las siguientes corridas arrancan al toque.
+`npx` clona el repo, corre `npm install` (que dispara el build de producción en el lifecycle
+`prepare`) y arranca. Mismo resultado, pero **la primera vez tarda varios minutos** (instala
+deps + compila). `npx` cachea por commit, así que las siguientes corridas en esa máquina
+arrancan al toque.
 
 ### Ejemplos por motor (el scheme define el driver)
 
@@ -97,39 +111,41 @@ SQLite de prueba y valida conexión, datos, diagrama (ERD) y teardown limpio del
 bash verify-dist.sh
 ```
 
-## Camino futuro: publicar en npm
+<a name="releasing"></a>
+## Releasing (cómo se publica la vía rápida)
 
-El esqueleto de publicación ya está (`name`, `bin`, `files`, `engines`, `prepare` que buildea en
-el install). Una vez publicado, sólo cambia el comando de uso:
+La vía rápida tiene dos piezas:
+1. **El launcher** (`launcher/`, paquete npm `quick-outerbase`): fino, sin deps, sin build. Es lo
+   único que se publica a npm. Baja el bundle precompilado de tu plataforma.
+2. **Los bundles `standalone`** precompilados por plataforma, subidos como **assets de un GitHub
+   Release**, generados por el workflow [`.github/workflows/release-bundles.yml`](./.github/workflows/release-bundles.yml).
+
+> La app de este repo raíz es `"private": true` a propósito: **no** se publica a npm (su build
+> necesita las `devDependencies` y eso rompería un install desde el registry). El launcher la
+> reemplaza como paquete npm. El flujo `npx github:` sigue andando para correr desde el código.
+
+Para cortar una versión `X.Y.Z` (deben coincidir el tag, `launcher/package.json` y la app):
 
 ```bash
-# hoy (desde GitHub)
-npx -y github:joajo13/quick-outerbase --url "..."
-
-# tras `npm publish`
-npx -y quick-outerbase --url "..."
-# o instalado global:
-npm i -g quick-outerbase && quick-outerbase --url "..."
+# 1) bump de versión en ambos package.json a X.Y.Z (app raíz + launcher/)
+# 2) commit + tag + push del tag → dispara el CI que buildea los bundles por plataforma
+git tag vX.Y.Z && git push origin vX.Y.Z
+#    (el workflow crea el Release vX.Y.Z y sube quick-outerbase-<plat>-<arch>.tar.gz)
+# 3) publicar el launcher a npm (necesita cuenta en npmjs.com + npm login)
+cd launcher && npm publish --access public
 ```
 
-> ⚠️ **Antes de `npm publish` hay UN cambio necesario.** El flujo `github:` funciona porque un
-> git-install instala también las `devDependencies`, y `prepare` compila con ellas. Pero un
-> consumidor que instala **desde el registry de npm** recibe sólo las `dependencies` (npm omite
-> las devDeps del paquete instalado), y `next build` necesita en build-time `typescript`,
-> `tailwindcss`/`@tailwindcss/postcss`/`postcss`, `shiki`/`showdown` y `eslint`/`eslint-config-next`
-> — hoy en `devDependencies`. Sin moverlas, el `prepare` del consumidor del registry fallaría.
-> Dos opciones antes de publicar:
-> 1. Mover esas deps de build a `dependencies`, **o**
-> 2. Sacar typescript+eslint del build con `typescript.ignoreBuildErrors: true` y
->    `eslint.ignoreDuringBuilds: true` en `next.config.js`, y mover sólo `tailwindcss`/`postcss`/
->    `shiki`/`showdown` a `dependencies`.
->
-> Verificalo de verdad con `npm pack` + instalar el tarball en un temp con `npm install --omit=dev`
-> (simula el registry), no sólo con el clone de GitHub. **El flujo `github:` documentado arriba NO
-> está afectado por esto.**
+Después, `npx quick-outerbase@X.Y.Z --url "..."` baja el bundle del Release vX.Y.Z. El launcher
+no incluye ningún `.env`, credencial ni base; el `DATABASE_URL` siempre lo provee el usuario.
 
-Pasos de publicación: `npm login` → `npm publish --access public`. El campo `files` controla qué
-entra al tarball. No se incluye ningún `.env`, credencial ni base de prueba.
+Probá el launcher localmente (sin release real) contra un bundle armado a mano:
+
+```bash
+NEXT_TELEMETRY_DISABLED=1 npx next build          # genera .next/standalone
+cp -r .next/static .next/standalone/.next/static && cp -r public .next/standalone/public
+tar -czf /tmp/sa.tgz -C .next/standalone .
+bash launcher/verify-launcher.sh /tmp/sa.tgz       # E2E: arranque + datos + teardown
+```
 
 ## Troubleshooting
 
