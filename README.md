@@ -22,7 +22,8 @@ desde GitHub Releases, lo cachea y arranca **en segundos** (no compila nada en t
 Abre el browser en `http://localhost:3008/env`. Al cortar con **Ctrl+C** libera el puerto sin
 zombies. Runs siguientes: instantáneos (cacheado en `~/.cache/quick-outerbase`).
 
-> Plataformas con bundle precompilado: `win32-x64`, `linux-x64`, `darwin-arm64`, `darwin-x64`.
+> Plataformas con bundle precompilado: `win32-x64`, `linux-x64`. En macOS, corré desde el
+> código: `npx github:joajo13/quick-outerbase --url "..."`.
 > El paquete `quick-outerbase` es un **launcher fino** (sin dependencias); el código fuente
 > completo vive en este repo (se buildea por plataforma en cada release, ver [Releases](#releasing)).
 

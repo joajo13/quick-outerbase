@@ -36,8 +36,8 @@ También podés pasar el URL por la env `DATABASE_URL`. Flags: `--port <n>` (def
 ## Requisitos
 
 - **Node 20.9+** y `tar` en el PATH (Windows 10+ lo trae como `tar.exe`).
-- Plataformas con runtime precompilado: `win32-x64`, `linux-x64`, `darwin-arm64`, `darwin-x64`.
-  Para otras, corré desde el código: `npx github:joajo13/quick-outerbase --url "..."`.
+- Plataformas con runtime precompilado: `win32-x64`, `linux-x64`.
+  Para otras (incluido macOS), corré desde el código: `npx github:joajo13/quick-outerbase --url "..."`.
 
 ## Variables de entorno útiles
 

@@ -90,12 +90,14 @@ console.log(`▶ quick-outerbase v${VERSION} → ${scheme} (${redacted})`);
 // --- Plataforma → nombre del asset del release ---
 const ARCH = process.arch; // x64 | arm64
 const PLAT = process.platform; // win32 | linux | darwin
-const SUPPORTED_TARGETS = new Set(["win32-x64", "linux-x64", "darwin-arm64", "darwin-x64"]);
+// Bundles precompilados: solo Linux y Windows. macOS quedó fuera a propósito
+// (los runners de macOS alargan mucho el CI). En Mac, corré desde el código.
+const SUPPORTED_TARGETS = new Set(["win32-x64", "linux-x64"]);
 const target = `${PLAT}-${ARCH}`;
 if (!SUPPORTED_TARGETS.has(target)) {
   fail(
     `No hay bundle precompilado para tu plataforma (${target}).\n` +
-      "Soportadas: win32-x64, linux-x64, darwin-arm64, darwin-x64.\n" +
+      "Soportadas: win32-x64, linux-x64.\n" +
       "Alternativa: corré desde el código con `npx github:" + REPO + "`."
   );
 }
