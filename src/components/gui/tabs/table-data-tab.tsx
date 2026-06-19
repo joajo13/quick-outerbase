@@ -59,10 +59,10 @@ function buildFocusWhere(
 ): string {
   const col = driver.escapeId(req.column);
   const v = req.value;
-  const val =
-    typeof v === "number" || typeof v === "bigint"
-      ? String(v)
-      : `'${String(v).replace(/'/g, "''")}'`;
+  if (v === null || v === undefined) return `${col} IS NULL`;
+  // Siempre como literal de texto: el motor lo coerciona al tipo de la columna,
+  // así una FK numérica contra una columna text no rompe (text = integer).
+  const val = `'${String(v).replace(/'/g, "''")}'`;
   return `${col} = ${val}`;
 }
 

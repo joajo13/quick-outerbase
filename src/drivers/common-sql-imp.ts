@@ -154,7 +154,18 @@ export default abstract class CommonSQLImplement extends BaseDriver {
   ): Promise<DatabaseResultSet> {
     const wherePart = Object.entries(key)
       .map(([colName, colValue]) => {
-        return `${this.escapeId(colName)} = ${escapeSqlValue(colValue)}`;
+        if (colValue === null || colValue === undefined) {
+          return `${this.escapeId(colName)} IS NULL`;
+        }
+        // Comparamos como literal de texto sin tipar: una FK numérica contra una
+        // columna text (o al revés) rompía con "operator does not exist:
+        // text = integer" en Postgres. Pasando el valor como '28', Postgres/
+        // MySQL/SQLite lo coercionan al tipo real de la columna.
+        const value =
+          typeof colValue === "number" || typeof colValue === "bigint"
+            ? escapeSqlValue(String(colValue))
+            : escapeSqlValue(colValue);
+        return `${this.escapeId(colName)} = ${value}`;
       })
       .join(" AND ");
 
