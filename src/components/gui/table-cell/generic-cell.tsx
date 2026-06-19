@@ -4,12 +4,14 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { useStudioContext } from "@/context/driver-provider";
+import { scc } from "@/core/command";
+import { requestTableRowFocus } from "@/core/table-focus";
 import { DatabaseResultSet, DatabaseValue } from "@/drivers/base-driver";
 import { convertDatabaseValueToString } from "@/drivers/sqlite/sql-helper";
 import { cn } from "@/lib/utils";
 import { isLinkString } from "@/lib/validation";
 import { ColumnType } from "@outerbase/sdk-transform";
-import { LucideArrowUpRight, LucideLoader } from "lucide-react";
+import { LucideArrowUpRight, LucideExternalLink, LucideLoader } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { OptimizeTableHeaderWithIndexProps } from "../table-optimized";
 import { TableHeaderMetadata } from "../table-result/type";
@@ -97,7 +99,7 @@ function ForeignKeyColumnSnippet(props: SneakpeakProps) {
   const [open, setOpen] = useState(false);
 
   return (
-    <Popover onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger>
         <LucideArrowUpRight className="h-4 w-4 text-gray-400 hover:text-blue-600" />
       </PopoverTrigger>
@@ -106,8 +108,31 @@ function ForeignKeyColumnSnippet(props: SneakpeakProps) {
         className="m-0 w-[400px] overflow-hidden p-0"
       >
         <div className="flex h-full w-full flex-col overflow-hidden">
-          <div className="border-b px-4 py-2">
-            <strong>{props.fkTableName}</strong>
+          <div className="flex items-center justify-between gap-2 border-b px-4 py-2">
+            <strong className="truncate">{props.fkTableName}</strong>
+            {/* "Ir a la tabla": abre la tabla referenciada y la filtra a la fila
+                apuntada por la FK (el foco ocurre en la vista de la tabla). */}
+            <button
+              type="button"
+              title="Ir a la tabla"
+              className="flex shrink-0 items-center gap-1 rounded border px-2 py-1 text-xs text-gray-500 hover:text-blue-600"
+              onClick={() => {
+                scc.tabs.openBuiltinTable({
+                  schemaName: props.fkSchemaName,
+                  tableName: props.fkTableName,
+                });
+                requestTableRowFocus({
+                  schemaName: props.fkSchemaName,
+                  tableName: props.fkTableName,
+                  column: props.fkColumnName,
+                  value: props.value,
+                });
+                setOpen(false);
+              }}
+            >
+              <LucideExternalLink className="h-3.5 w-3.5" />
+              Ir a la tabla
+            </button>
           </div>
           <div className="max-h-[300px] grow overflow-x-hidden overflow-y-auto">
             {open && <SnippetRow {...props} />}

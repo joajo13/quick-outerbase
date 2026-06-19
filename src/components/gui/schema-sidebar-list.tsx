@@ -212,6 +212,20 @@ export default function SchemaList({ search }: Readonly<SchemaListProps>) {
 
       const modificationSection = item
         ? [
+            // "View Table": inspección read-only del schema (tipos, constraints,
+            // PK/FK). Disponible para cualquier tabla, soporte o no de edición.
+            isTable
+              ? {
+                  title: "View Table",
+                  onClick: () => {
+                    scc.tabs.openBuiltinSchema({
+                      schemaName: item?.schemaName ?? currentSchemaName,
+                      tableName: item?.name,
+                      readOnly: true,
+                    });
+                  },
+                }
+              : undefined,
             isTable && databaseDriver.getFlags().supportCreateUpdateTable
               ? {
                   title: "Edit Table",

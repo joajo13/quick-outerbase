@@ -3,6 +3,7 @@ import { DevTools } from "@/components/gui/tabs/relational-diagram-tab/devtools"
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { useSchema } from "@/context/schema-provider";
+import { scc } from "@/core/command";
 import { DatabaseSchemas } from "@/drivers/base-driver";
 import Dagre from "@dagrejs/dagre";
 import {
@@ -462,6 +463,15 @@ function ERDCanvas({
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onNodeClick={(_, node) => setFocus({ type: "node", table: node.id })}
+        // Doble click sobre una tabla → abre sus datos en una pestaña nueva.
+        // No choca con el single-click (que resalta relaciones): el click setea
+        // el foco y el doble-click además navega a la vista de datos.
+        onNodeDoubleClick={(_, node) => {
+          scc.tabs.openBuiltinTable({
+            schemaName: (node.data?.schemaName as string) ?? "",
+            tableName: node.id,
+          });
+        }}
         onPaneClick={() => setFocus(null)}
         fitView
         nodeTypes={nodeTypes}

@@ -156,12 +156,14 @@ function ColumnItem({
   onChange,
   options,
   disabledEditExistingColumn,
+  readOnly,
 }: {
   value: DatabaseTableColumnChange;
   idx: number;
   schemaName?: string;
   onChange: Dispatch<SetStateAction<DatabaseTableSchemaChange>>;
   disabledEditExistingColumn?: boolean;
+  readOnly?: boolean;
   options: SchemaEditorOptions;
 }) {
   const {
@@ -222,6 +224,7 @@ function ColumnItem({
         <div className="flex items-center">
           <input
             value={column.name}
+            disabled={disabled}
             onChange={(e) => change({ name: e.currentTarget.value })}
             className="w-[150px] bg-inherit p-2 text-sm outline-hidden"
             spellCheck={false}
@@ -308,6 +311,7 @@ function ColumnItem({
             />
           )}
 
+          {!readOnly && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="rounded border p-1 shadow-sm">
@@ -377,6 +381,7 @@ function ColumnItem({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          )}
         </div>
       </td>
       {options.collations.length > 0 && (
@@ -394,16 +399,18 @@ function ColumnItem({
           />
         </td>
       )}
-      <td className="border px-1">
-        <button
-          className="p-1"
-          onClick={() => {
-            change(null);
-          }}
-        >
-          <LucideTrash2 className="h-4 w-4 text-red-500" />
-        </button>
-      </td>
+      {!readOnly && (
+        <td className="border px-1">
+          <button
+            className="p-1"
+            onClick={() => {
+              change(null);
+            }}
+          >
+            <LucideTrash2 className="h-4 w-4 text-red-500" />
+          </button>
+        </td>
+      )}
     </tr>
   );
 }
@@ -414,6 +421,7 @@ export default function SchemaEditorColumnList({
   schemaName,
   onAddColumn,
   disabledEditExistingColumn,
+  readOnly,
   options,
 }: Readonly<{
   columns: DatabaseTableColumnChange[];
@@ -421,6 +429,7 @@ export default function SchemaEditorColumnList({
   schemaName?: string;
   onAddColumn: () => void;
   disabledEditExistingColumn?: boolean;
+  readOnly?: boolean;
   options: SchemaEditorOptions;
 }>) {
   const headerStyle = "text-xs p-2 text-left bg-secondary border";
@@ -483,7 +492,7 @@ export default function SchemaEditorColumnList({
                 <th className={cn(headerStyle, "w-[160px]")}>Collation</th>
               )}
 
-              <th className={cn(headerStyle, "w-[30px]")}></th>
+              {!readOnly && <th className={cn(headerStyle, "w-[30px]")}></th>}
             </tr>
           </thead>
           <tbody>
@@ -499,20 +508,23 @@ export default function SchemaEditorColumnList({
                   onChange={onChange}
                   schemaName={schemaName}
                   disabledEditExistingColumn={disabledEditExistingColumn}
+                  readOnly={readOnly}
                   options={options}
                 />
               ))}
             </SortableContext>
           </tbody>
-          <tfoot>
-            <tr>
-              <td colSpan={headerCounter} className="border px-4 py-2">
-                <Button size="sm" onClick={onAddColumn}>
-                  <LucidePlus className="mr-1 h-4 w-4" /> Add Column
-                </Button>
-              </td>
-            </tr>
-          </tfoot>
+          {!readOnly && (
+            <tfoot>
+              <tr>
+                <td colSpan={headerCounter} className="border px-4 py-2">
+                  <Button size="sm" onClick={onAddColumn}>
+                    <LucidePlus className="mr-1 h-4 w-4" /> Add Column
+                  </Button>
+                </td>
+              </tr>
+            </tfoot>
+          )}
         </table>
       </DndContext>
     </div>

@@ -14,6 +14,8 @@ import SchemaSaveDialog from "../schema-editor/schema-save-dialog";
 interface SchemaEditorTabProps {
   tableName?: string;
   schemaName?: string;
+  /** Abre en modo "Ver" (inspección). Un botón permite pasar a edición. */
+  readOnly?: boolean;
 }
 
 const EMPTY_SCHEMA: DatabaseTableSchemaChange = {
@@ -26,8 +28,11 @@ const EMPTY_SCHEMA: DatabaseTableSchemaChange = {
 export default function SchemaEditorTab({
   schemaName,
   tableName,
+  readOnly,
 }: Readonly<SchemaEditorTabProps>) {
   const { databaseDriver } = useStudioContext();
+  // Empieza en read-only si se abrió en modo "Ver"; el botón Editar lo desbloquea.
+  const [editing, setEditing] = useState(false);
   const [schema, setSchema] = useState<DatabaseTableSchemaChange>({
     ...EMPTY_SCHEMA,
     schemaName,
@@ -111,6 +116,8 @@ export default function SchemaEditorTab({
         onChange={setSchema}
         onSave={onSaveToggle}
         onDiscard={onDiscard}
+        readOnly={!!readOnly && !editing}
+        onEdit={() => setEditing(true)}
       />
     </>
   );

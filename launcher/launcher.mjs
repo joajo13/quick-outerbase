@@ -121,12 +121,9 @@ async function ensureBundle() {
   const localOverride = process.env.QUICK_OUTERBASE_BUNDLE;
   if (localOverride) {
     if (!existsSync(localOverride)) fail(`QUICK_OUTERBASE_BUNDLE no existe: ${localOverride}`);
-    console.log(`• Usando bundle local: ${localOverride}`);
     copyFileSync(localOverride, innerTgz);
   } else {
-    console.log(`• Descargando runtime (${assetName}, ~28MB, una sola vez)…`);
     await download(assetUrl, innerTgz);
-    console.log("• Extrayendo…");
   }
   extractInDir(bundleDir, "_bundle.tar.gz");
   try {
@@ -219,6 +216,10 @@ async function main() {
   if (!noOpen) {
     const targetUrl = `http://localhost:${port}/env`;
     const started = Date.now();
+    // Puede haber varios requests del poll en vuelo a la vez (el server tarda más
+    // que el intervalo en responder el primero). Sin este guard, dos respuestas OK
+    // abrían el navegador dos veces. `opened` asegura una sola apertura.
+    let opened = false;
     const poll = setInterval(() => {
       if (tearingDown) return clearInterval(poll);
       const req = http.get(
@@ -226,6 +227,8 @@ async function main() {
         (res) => {
           res.destroy();
           clearInterval(poll);
+          if (opened) return;
+          opened = true;
           console.log(`✔ Listo en ${targetUrl}`);
           openBrowser(targetUrl);
         }

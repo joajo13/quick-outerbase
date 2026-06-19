@@ -1,11 +1,14 @@
 import SchemaEditorTab from "@/components/gui/tabs/schema-editor-tab";
-import { LucideTableProperties } from "lucide-react";
+import { LucideEye, LucideTableProperties } from "lucide-react";
 import { createTabExtension } from "../extension-tab";
 
 export const builtinOpenSchemaTab = createTabExtension<
   | {
       schemaName?: string;
       tableName?: string;
+      // readOnly: abre el schema en modo "Ver" (inspección), con un botón para
+      // pasar a edición. Usa una key/tab distinta a la de "Edit Table".
+      readOnly?: boolean;
     }
   | undefined
 >({
@@ -14,7 +17,8 @@ export const builtinOpenSchemaTab = createTabExtension<
     if (!options?.tableName) {
       return "create";
     }
-    return `${options.schemaName}-${options.tableName}`;
+    const prefix = options.readOnly ? "view-" : "";
+    return `${prefix}${options.schemaName}-${options.tableName}`;
   },
   generate: (options) => ({
     title: options?.tableName ? options.tableName : "New Table",
@@ -22,8 +26,9 @@ export const builtinOpenSchemaTab = createTabExtension<
       <SchemaEditorTab
         tableName={options?.tableName}
         schemaName={options?.schemaName}
+        readOnly={options?.readOnly}
       />
     ),
-    icon: LucideTableProperties,
+    icon: options?.readOnly ? LucideEye : LucideTableProperties,
   }),
 });

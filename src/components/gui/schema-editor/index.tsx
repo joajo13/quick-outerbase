@@ -10,6 +10,7 @@ import {
   LucideCopy,
   LucideKeyRound,
   LucideList,
+  LucidePencil,
   LucidePlus,
   LucideSave,
 } from "lucide-react";
@@ -32,6 +33,9 @@ interface Props {
   onChange: Dispatch<SetStateAction<DatabaseTableSchemaChange>>;
   /** Original introspected schema (read-only metadata: comment, indexes, ...). */
   introspection?: DatabaseTableSchema;
+  /** Modo "Ver": sin edición, con botón para pasar a edición. */
+  readOnly?: boolean;
+  onEdit?: () => void;
 }
 
 export default function SchemaEditor({
@@ -40,6 +44,8 @@ export default function SchemaEditor({
   onSave,
   onDiscard,
   introspection,
+  readOnly,
+  onEdit,
 }: Readonly<Props>) {
   const { databaseDriver } = useStudioContext();
   const isCreateScript = value.name.old === "";
@@ -89,33 +95,43 @@ export default function SchemaEditor({
     <div className="flex h-full w-full flex-col">
       <div className="shrink-0 grow-0">
         <div className="flex gap-2 p-1">
-          <Button
-            variant="ghost"
-            onClick={onSave}
-            disabled={!hasChange || !value.name?.new || !value.schemaName}
-            size={"sm"}
-          >
-            <LucideSave className="mr-2 h-4 w-4" />
-            Save
-          </Button>
-          <Button
-            size={"sm"}
-            variant="ghost"
-            onClick={onDiscard}
-            disabled={!hasChange}
-            className="text-red-500"
-          >
-            Discard Change
-          </Button>
+          {readOnly ? (
+            // Modo "Ver": sin guardar/descartar/agregar, solo pasar a edición.
+            <Button variant="ghost" onClick={onEdit} size={"sm"}>
+              <LucidePencil className="mr-2 h-4 w-4" />
+              Edit
+            </Button>
+          ) : (
+            <>
+              <Button
+                variant="ghost"
+                onClick={onSave}
+                disabled={!hasChange || !value.name?.new || !value.schemaName}
+                size={"sm"}
+              >
+                <LucideSave className="mr-2 h-4 w-4" />
+                Save
+              </Button>
+              <Button
+                size={"sm"}
+                variant="ghost"
+                onClick={onDiscard}
+                disabled={!hasChange}
+                className="text-red-500"
+              >
+                Discard Change
+              </Button>
 
-          <div>
-            <Separator orientation="vertical" />
-          </div>
+              <div>
+                <Separator orientation="vertical" />
+              </div>
 
-          <Button variant="ghost" onClick={onAddColumn} size={"sm"}>
-            <LucidePlus className="mr-1 h-4 w-4" />
-            Add Column
-          </Button>
+              <Button variant="ghost" onClick={onAddColumn} size={"sm"}>
+                <LucidePlus className="mr-1 h-4 w-4" />
+                Add Column
+              </Button>
+            </>
+          )}
 
           <div>
             <Separator orientation="vertical" />
@@ -177,6 +193,7 @@ export default function SchemaEditor({
             <Input
               placeholder="Table Name"
               value={value.name.new ?? value.name.old ?? ""}
+              disabled={readOnly}
               onChange={(e) => {
                 onChange({
                   ...value,
@@ -216,8 +233,9 @@ export default function SchemaEditor({
           onAddColumn={onAddColumn}
           schemaName={value.schemaName}
           options={editorOptions}
+          readOnly={readOnly}
           disabledEditExistingColumn={
-            !databaseDriver.getFlags().supportModifyColumn
+            readOnly || !databaseDriver.getFlags().supportModifyColumn
           }
         />
         <ColumnsProvider value={value.columns}>
@@ -225,7 +243,7 @@ export default function SchemaEditor({
             schemaName={value.schemaName}
             constraints={value.constraints}
             onChange={onChange}
-            disabled={!isCreateScript}
+            disabled={readOnly || !isCreateScript}
           />
         </ColumnsProvider>
 

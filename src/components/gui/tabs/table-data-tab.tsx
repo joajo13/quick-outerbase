@@ -17,6 +17,12 @@ import { useAutoComplete } from "@/context/auto-complete-provider";
 import { useStudioContext } from "@/context/driver-provider";
 import { useSchema } from "@/context/schema-provider";
 import {
+  consumePendingTableRowFocus,
+  tableRowFocusChannel,
+  TableRowFocusRequest,
+} from "@/core/table-focus";
+import {
+  BaseDriver,
   ColumnSortOption,
   DatabaseResultStat,
   DatabaseTableSchema,
@@ -46,6 +52,20 @@ interface TableDataContentProps {
   schemaName: string;
 }
 
+// Arma el WHERE para focusear una fila pedida desde una FK (column = value).
+function buildFocusWhere(
+  driver: BaseDriver,
+  req: TableRowFocusRequest
+): string {
+  const col = driver.escapeId(req.column);
+  const v = req.value;
+  const val =
+    typeof v === "number" || typeof v === "bigint"
+      ? String(v)
+      : `'${String(v).replace(/'/g, "''")}'`;
+  return `${col} = ${val}`;
+}
+
 export default function TableDataWindow({
   schemaName,
   tableName,
@@ -63,8 +83,13 @@ export default function TableDataWindow({
   const [sortColumns, setSortColumns] = useState<ColumnSortOption[]>([]);
   const [changeNumber, setChangeNumber] = useState(0);
 
-  const [where, setWhere] = useState("");
-  const [whereInput, setWhereInput] = useState("");
+  // Foco pendiente: si esta tabla se abrió desde "ir a la tabla" de una FK,
+  // arrancamos ya filtrada a la fila referenciada.
+  const [where, setWhere] = useState(() => {
+    const f = consumePendingTableRowFocus(schemaName, tableName);
+    return f ? buildFocusWhere(databaseDriver, f) : "";
+  });
+  const [whereInput, setWhereInput] = useState(where);
 
   const [offset, setOffset] = useState("0");
   const [limit, setLimit] = useState("50");
@@ -142,6 +167,19 @@ export default function TableDataWindow({
       return () => data.removeChangeListener(callback);
     }
   }, [data]);
+
+  // Tabla YA abierta: si llega un pedido de foco para esta tabla (desde una FK),
+  // filtramos a la fila referenciada y volvemos a la primera página.
+  useEffect(() => {
+    return tableRowFocusChannel.listen((req) => {
+      if (req.schemaName !== schemaName || req.tableName !== tableName) return;
+      const w = buildFocusWhere(databaseDriver, req);
+      setWhereInput(w);
+      setWhere(w);
+      setFinalOffset(0);
+      setOffset("0");
+    });
+  }, [schemaName, tableName, databaseDriver]);
 
   const { columnIndexList, filterColumnButton } = useTableResultColumnFilter({
     state: data,

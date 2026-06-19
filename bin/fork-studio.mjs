@@ -215,6 +215,9 @@ child.on("exit", (code) => {
 if (!noOpen) {
   const target = `http://localhost:${port}/env`;
   const started = Date.now();
+  // Guard contra doble apertura: puede haber varios requests del poll en vuelo
+  // antes de que el primero responda, y cada respuesta OK abría el navegador.
+  let opened = false;
   const poll = setInterval(() => {
     if (tearingDown) return clearInterval(poll);
     const req = http.get(
@@ -222,6 +225,8 @@ if (!noOpen) {
       (res) => {
         res.destroy();
         clearInterval(poll);
+        if (opened) return;
+        opened = true;
         console.log(`✔ Listo en ${target}`);
         openBrowser(target);
       }
