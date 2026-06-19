@@ -1,5 +1,6 @@
 "use client";
 
+import { useLocalMode } from "@/lib/local-mode";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import NavigationLayout from "./nav-layout";
@@ -9,10 +10,20 @@ import { useWorkspaces } from "./workspace-provider";
 
 export default function OuterbaseMainPage() {
   const router = useRouter();
+  const { localMode, isLoading: localModeLoading } = useLocalMode();
   const { isLoading: sessionLoading, session } = useSession();
   const { workspaces, loading: workspaceLoading } = useWorkspaces();
 
   useEffect(() => {
+    // Esperamos a saber el modo para no parpadear a una pantalla de cloud.
+    if (localModeLoading) return;
+
+    // Modo local/standalone: la raíz va directo al visor de la DB, sin cloud.
+    if (localMode) {
+      router.replace("/env");
+      return;
+    }
+
     if (sessionLoading) return;
 
     // Invalid session, go to local connection
@@ -29,7 +40,15 @@ export default function OuterbaseMainPage() {
     } else {
       router.push("/local");
     }
-  }, [session, sessionLoading, workspaceLoading, workspaces, router]);
+  }, [
+    localMode,
+    localModeLoading,
+    session,
+    sessionLoading,
+    workspaceLoading,
+    workspaces,
+    router,
+  ]);
 
   return (
     <NavigationLayout>

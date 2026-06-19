@@ -4,6 +4,7 @@ import {
   SidebarMenuItem,
   SidebarMenuLoadingItem,
 } from "@/components/sidebar-menu";
+import { useLocalMode } from "@/lib/local-mode";
 import { cn } from "@/lib/utils";
 import { Database, List, Plus } from "@phosphor-icons/react";
 import { useParams, usePathname, useRouter } from "next/navigation";
@@ -17,6 +18,7 @@ export default function NavigationLayout({ children }: PropsWithChildren) {
   const router = useRouter();
   const [mobileToggle, setMobileToggle] = useState(false);
   const { session } = useSession();
+  const { localMode } = useLocalMode();
   const { workspaces, loading: workspaceLoading } = useWorkspaces();
   const pathname = usePathname();
   const { workspaceId } = useParams<{ workspaceId?: string }>();
@@ -60,7 +62,9 @@ export default function NavigationLayout({ children }: PropsWithChildren) {
               href="/local"
             />
 
-            {workspaces.map((workspace) => {
+            {/* Workspaces de cloud y "New Workspace" solo en modo no-local. */}
+            {!localMode &&
+              workspaces.map((workspace) => {
               return (
                 <SidebarMenuItem
                   key={workspace.id}
@@ -86,7 +90,7 @@ export default function NavigationLayout({ children }: PropsWithChildren) {
               );
             })}
 
-            {workspaceLoading && (
+            {!localMode && workspaceLoading && (
               <>
                 <SidebarMenuLoadingItem />
                 <SidebarMenuLoadingItem />
@@ -94,18 +98,20 @@ export default function NavigationLayout({ children }: PropsWithChildren) {
               </>
             )}
 
-            <SidebarMenuItem
-              text={"New Workspace"}
-              icon={Plus}
-              onClick={() => {
-                if (session?.user) {
-                  router.push("/new-workspace");
-                } else {
-                  localStorage.setItem("continue-redirect", "/new-workspace");
-                  router.push("/signin");
-                }
-              }}
-            />
+            {!localMode && (
+              <SidebarMenuItem
+                text={"New Workspace"}
+                icon={Plus}
+                onClick={() => {
+                  if (session?.user) {
+                    router.push("/new-workspace");
+                  } else {
+                    localStorage.setItem("continue-redirect", "/new-workspace");
+                    router.push("/signin");
+                  }
+                }}
+              />
+            )}
           </div>
 
           <NavigationSigninBanner />

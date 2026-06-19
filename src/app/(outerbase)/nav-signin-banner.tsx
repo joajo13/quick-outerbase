@@ -1,11 +1,13 @@
 import Banner from "@/components/orbit/banner";
 import RippleFilter from "@/components/orbit/banner/ripple-filter";
 import { Button } from "@/components/orbit/button";
+import { useLocalMode } from "@/lib/local-mode";
 import { useRouter } from "next/navigation";
 import { useSession } from "./session-provider";
 
 export default function NavigationSigninBanner() {
   const { isLoading, session } = useSession();
+  const { localMode } = useLocalMode();
   const router = useRouter();
 
   if (isLoading) {
@@ -13,6 +15,11 @@ export default function NavigationSigninBanner() {
   }
 
   if (session) {
+    return null;
+  }
+
+  // En modo local no promocionamos Outerbase Cloud.
+  if (localMode) {
     return null;
   }
 

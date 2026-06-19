@@ -17,6 +17,8 @@ import {
   MarkerType,
   MiniMap,
   Node,
+  OnEdgesChange,
+  OnNodesChange,
   ReactFlow,
   ReactFlowProvider,
   useEdgesState,
@@ -30,6 +32,17 @@ import SchemaNameSelect from "../../schema-editor/schema-name-select";
 import { Toolbar } from "../../toolbar";
 import { DownloadImageDiagram } from "./download-image-diagram";
 import ERDTableColumnEdge from "./erd-table-column-edge";
+import { ERDFocusProvider, useERDFocus } from "./erd-focus";
+
+// Definidos a nivel módulo (estáticos): React Flow recomienda no recrearlos en
+// cada render para no remontar nodos/edges.
+const nodeTypes = {
+  databaseSchema: DatabaseSchemaNode,
+};
+
+const edgeTypes = {
+  erdTableColumn: ERDTableColumnEdge,
+};
 
 const NODE_MARGIN = 50;
 const MAX_NODE_WIDTH = 300;
@@ -163,6 +176,13 @@ function mapSchema(
   initialEdges.length = 0;
   initialEdges.push(...dedupedEdges);
 
+  // Columnas que son destino de una FK (PK referenciada). Las marcamos para que
+  // el ERD permita clickearlas y resaltar la relación desde el lado "uno".
+  const referencedColumnList = new Set<string>();
+  for (const e of initialEdges) {
+    if (e.targetHandle) referencedColumnList.add(`${e.target}.${e.targetHandle}`);
+  }
+
   // Split the schema into without relationship and with relationship
   const schemaWithRelationship = schema[selectedSchema].filter((x) => {
     if (x.type !== "table") return false;
@@ -196,6 +216,7 @@ function mapSchema(
             type: column.type,
             pk: !!column.pk,
             fk: foreignKeyList.has(`${item.name}.${column.name}`),
+            referenced: referencedColumnList.has(`${item.name}.${column.name}`),
             unique: !!column.constraint?.unique,
             nullable: !column.constraint?.notNull,
             comment: column.comment,
@@ -282,6 +303,7 @@ function mapSchema(
             type: column.type,
             pk: !!column.pk,
             fk: foreignKeyList.has(`${node.name}.${column.name}`),
+            referenced: referencedColumnList.has(`${node.name}.${column.name}`),
             unique: !!column.constraint?.unique,
             nullable: !column.constraint?.notNull,
             comment: column.comment,
@@ -312,14 +334,6 @@ function LayoutFlow() {
       setEdges(initialEdges);
     }
   }, [schema, selectedSchema, setNodes, setEdges]);
-
-  const nodeTypes = {
-    databaseSchema: DatabaseSchemaNode,
-  };
-
-  const edgeTypes = {
-    erdTableColumn: ERDTableColumnEdge,
-  };
 
   const appTheme = (forcedTheme ?? resolvedTheme) as "dark" | "light";
 
@@ -394,30 +408,76 @@ function LayoutFlow() {
         </Toolbar>
       </div>
       {selectedSchema && (
-        <div className="relative flex-1 overflow-hidden">
-          <ReactFlow
-            colorMode={appTheme}
+        <ERDFocusProvider edges={edges}>
+          <ERDCanvas
             nodes={nodes}
             edges={edges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
-            fitView
-            nodeTypes={nodeTypes}
-            edgeTypes={edgeTypes}
-            minZoom={0.1}
-          >
-            <Background
-              variant={BackgroundVariant.Dots}
-              gap={16}
-              size={1}
-              bgColor={appTheme === "dark" ? "#141616" : "#f7f7f7"}
-              color={appTheme === "dark" ? "#393b3c" : "#d1d2d3"}
-            />
-            <Controls />
-            <MiniMap pannable zoomable />
-          </ReactFlow>
-        </div>
+            appTheme={appTheme}
+          />
+        </ERDFocusProvider>
       )}
+    </div>
+  );
+}
+
+interface ERDCanvasProps {
+  nodes: Node[];
+  edges: Edge[];
+  onNodesChange: OnNodesChange<Node>;
+  onEdgesChange: OnEdgesChange<Edge>;
+  appTheme: "dark" | "light";
+}
+
+/**
+ * Canvas del ERD. Vive dentro del ERDFocusProvider para poder setear el foco al
+ * clickear una tabla (onNodeClick), limpiarlo al clickear el fondo (onPaneClick)
+ * o con Esc. El resaltado por columna lo dispara cada columna desde su onClick.
+ */
+function ERDCanvas({
+  nodes,
+  edges,
+  onNodesChange,
+  onEdgesChange,
+  appTheme,
+}: ERDCanvasProps) {
+  const { setFocus, active } = useERDFocus();
+
+  useEffect(() => {
+    if (!active) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setFocus(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [active, setFocus]);
+
+  return (
+    <div className="relative flex-1 overflow-hidden">
+      <ReactFlow
+        colorMode={appTheme}
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onNodeClick={(_, node) => setFocus({ type: "node", table: node.id })}
+        onPaneClick={() => setFocus(null)}
+        fitView
+        nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
+        minZoom={0.1}
+      >
+        <Background
+          variant={BackgroundVariant.Dots}
+          gap={16}
+          size={1}
+          bgColor={appTheme === "dark" ? "#141616" : "#f7f7f7"}
+          color={appTheme === "dark" ? "#393b3c" : "#d1d2d3"}
+        />
+        <Controls />
+        <MiniMap pannable zoomable />
+      </ReactFlow>
     </div>
   );
 }

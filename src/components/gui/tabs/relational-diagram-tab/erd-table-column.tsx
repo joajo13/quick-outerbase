@@ -4,18 +4,27 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 import { Position } from "@xyflow/react";
 import { Diamond, KeyRound, Link2 } from "lucide-react";
 import { ERDSchemaNodeColumnProps } from "./database-schema-node";
+import { useColumnHighlighted, useERDFocus } from "./erd-focus";
 
 // Verde firma de Liam (claro/oscuro para contraste).
 const ACCENT = "text-[#008543] dark:text-[#1ded83]";
 
 export default function ERDTableColumn({
   column,
+  tableName,
 }: {
   column: ERDSchemaNodeColumnProps;
+  tableName: string;
 }) {
+  const { setFocus } = useERDFocus();
+  const highlighted = useColumnHighlighted(tableName, column.title);
+  // Solo las columnas que participan de una relación (FK o PK referenciada)
+  // son clickeables para enfocar esa relación.
+  const clickable = column.fk || !!column.referenced;
   const icon = column.pk ? (
     <KeyRound size={14} strokeWidth={1.75} className={ACCENT} />
   ) : column.fk ? (
@@ -31,7 +40,21 @@ export default function ERDTableColumn({
   );
 
   const row = (
-    <div className="group relative grid h-8 grid-cols-[auto_1fr] items-center gap-1.5 border-b border-[#e7e8ea] px-2 last:border-b-0 last:rounded-b-md hover:bg-[#f0f1f2] dark:border-[#2c2f30] dark:hover:bg-[#383a3b]">
+    <div
+      onClick={(e) => {
+        if (!clickable) return;
+        // stopPropagation: que no burbujee a onNodeClick (que enfocaría la tabla).
+        e.stopPropagation();
+        setFocus({ type: "column", table: tableName, column: column.title });
+      }}
+      className={cn(
+        "group relative grid h-8 grid-cols-[auto_1fr] items-center gap-1.5 border-b border-[#e7e8ea] px-2 last:border-b-0 last:rounded-b-md dark:border-[#2c2f30]",
+        clickable && "cursor-pointer",
+        highlighted
+          ? "bg-[#1ded83]/20 dark:bg-[#1ded83]/15"
+          : "hover:bg-[#f0f1f2] dark:hover:bg-[#383a3b]"
+      )}
+    >
       <BaseHandle
         id={column.title}
         type="target"

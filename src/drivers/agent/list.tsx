@@ -11,6 +11,9 @@ interface AgentDriverListItem {
   name: string;
   free?: boolean;
   available: boolean;
+  // Ítem que no es un modelo seleccionable sino un atajo para abrir el dialog
+  // de settings de AI (pegar la API key). Se renderiza clickeable, no disabled.
+  openSettings?: boolean;
 }
 
 interface AgentDriverListGroup {
@@ -129,7 +132,9 @@ export default class AgentDriverList {
       groups.push({
         name: "byo",
         title: "Bring your own model",
-        agents: [{ name: "configure in settings", available: false }],
+        agents: [
+          { name: "configure in settings", available: false, openSettings: true },
+        ],
       });
     }
 

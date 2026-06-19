@@ -11,6 +11,7 @@ import {
   type Edge,
   type EdgeProps,
 } from "@xyflow/react";
+import { useEdgeFocusState } from "./erd-focus";
 
 const EDGE_REST = "#9aa0a6";
 const EDGE_HILITE = "#1ded83";
@@ -162,6 +163,7 @@ export default function ERDTableColumnEdge({
   const sourceNode = useInternalNode(source);
   const targetNode = useInternalNode(target);
   const [hover, setHover] = useState(false);
+  const focusState = useEdgeFocusState(id);
 
   if (!sourceNode || !targetNode) {
     return null;
@@ -183,7 +185,11 @@ export default function ERDTableColumnEdge({
     targetY: ty,
   });
 
-  const color = hover ? EDGE_HILITE : EDGE_REST;
+  // El edge se resalta por hover o por foco activo ("on"); se atenúa si hay un
+  // foco activo en otra parte del diagrama ("dim").
+  const on = hover || focusState === "on";
+  const dim = focusState === "dim";
+  const color = on ? EDGE_HILITE : EDGE_REST;
 
   // Cardinalidad: lado FK (source) = "muchos" (N), lado PK (target) = "uno" (1).
   const badge = (
@@ -226,13 +232,14 @@ export default function ERDTableColumnEdge({
         path={edgePath}
         style={{
           stroke: color,
-          strokeWidth: hover ? 2 : 1.5,
-          transition: "stroke 150ms",
+          strokeWidth: on ? 2 : 1.5,
+          opacity: dim ? 0.15 : 1,
+          transition: "stroke 150ms, opacity 150ms",
         }}
       />
       <EdgeLabelRenderer>
-        {badge(sx, sy, "N", hover)}
-        {badge(tx, ty, "1", hover)}
+        {badge(sx, sy, "N", on)}
+        {badge(tx, ty, "1", on)}
       </EdgeLabelRenderer>
     </>
   );

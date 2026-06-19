@@ -14,6 +14,7 @@ import {
   ToggleLeft,
   ToggleRight,
 } from "@phosphor-icons/react";
+import { useLocalMode } from "@/lib/local-mode";
 import { useTheme } from "next-themes";
 import { useRouter } from "next/navigation";
 import { useCallback } from "react";
@@ -23,6 +24,7 @@ import { useSession } from "./session-provider";
 export default function NavigationProfile() {
   const { resolvedTheme, forcedTheme, setTheme } = useTheme();
   const { session, isLoading } = useSession();
+  const { localMode } = useLocalMode();
   const router = useRouter();
 
   const theme = forcedTheme ?? resolvedTheme;
@@ -126,7 +128,7 @@ export default function NavigationProfile() {
               Log out <SignOut size={20} />
             </DropdownMenuItem>
           )}
-          {!session && (
+          {!session && !localMode && (
             <DropdownMenuItem
               onClick={() => {
                 router.push("/signin");

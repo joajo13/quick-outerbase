@@ -1,6 +1,7 @@
 "use client";
 
 import AgentDriverList from "@/drivers/agent/list";
+import { localSettingDialog } from "@/app/(outerbase)/local-setting-dialog";
 import { cn } from "@/lib/utils";
 import { Check, X } from "@phosphor-icons/react";
 import { useCallback, useMemo, useRef, useState } from "react";
@@ -237,10 +238,16 @@ export function CodeMirrorPromptWidget({
                   <DropdownMenuLabel>{group.title}</DropdownMenuLabel>
                   {group.agents.map((agent) => (
                     <DropdownMenuItem
-                      disabled={!agent.available}
+                      disabled={!agent.available && !agent.openSettings}
                       inset={selectedAgent !== agent.name}
                       key={agent.name}
                       onClick={() => {
+                        // El ítem "configure in settings" abre el dialog de AI
+                        // (pegar API key) en vez de seleccionar un modelo.
+                        if (agent.openSettings) {
+                          localSettingDialog.show({}).then().catch();
+                          return;
+                        }
                         setSelectedAgent(agent.name);
                         if (agentDriver) {
                           agentDriver.setDefaultModelName(agent.name);

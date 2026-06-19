@@ -36,7 +36,9 @@ export default function EnvPageBody() {
 
   const driver = useMemo(() => {
     if (!info) return null;
-    return createEnvDriver(info.dialect);
+    // Pasamos el schema configurado (?schema=) para que Postgres filtre la
+    // introspección a ese schema. En DBs sin schema, info.schema viene vacío.
+    return createEnvDriver(info.dialect, info.schema);
   }, [info]);
 
   const extensions = useMemo(() => {

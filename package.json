@@ -1,6 +1,6 @@
 {
   "name": "quick-outerbase",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Fork de Outerbase Studio: tomá un DATABASE_URL y levantá una UI web local agnóstica al motor (postgres/mysql/sqlite/libsql) con un solo comando. Distribuible vía npx. Fork de outerbase/studio (AGPL-3.0).",
   "license": "AGPL-3.0-only",

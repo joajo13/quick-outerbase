@@ -183,6 +183,18 @@ export default function SchemaList({ search }: Readonly<SchemaListProps>) {
       const isTable = item?.type === "table";
       const schemaName = item?.schemaName ?? currentSchemaName;
 
+      // "Open Diagram" sobre un schema (pg/mysql) abre el ERD. En DBs sin nodo
+      // de schema (sqlite, árbol aplanado) lo ofrecemos al clickear la raíz vacía.
+      const diagramSection =
+        item?.type === "schema" || !item
+          ? {
+              title: "Open Diagram",
+              onClick: () => {
+                scc.tabs.openBuiltinERD({});
+              },
+            }
+          : undefined;
+
       const createMenuSection = {
         title: "Create",
         sub: [
@@ -237,6 +249,7 @@ export default function SchemaList({ search }: Readonly<SchemaListProps>) {
 
       return [
         createMenuSection,
+        diagramSection,
         {
           title: "Copy Name",
           disabled: !selectedName,

@@ -93,7 +93,12 @@ interface PostgresConstraintRow {
 }
 
 export default class PostgresLikeDriver extends CommonSQLImplement {
-  constructor(protected _db: QueryableBaseDriver) {
+  // _schema: cuando viene seteado (flujo Prisma ?schema=X), la introspección
+  // se filtra SOLO a ese schema. Si no hay schema → comportamiento de siempre.
+  constructor(
+    protected _db: QueryableBaseDriver,
+    protected _schema?: string
+  ) {
     super();
   }
 
@@ -151,11 +156,23 @@ export default class PostgresLikeDriver extends CommonSQLImplement {
   }
 
   async schemas(): Promise<DatabaseSchemas> {
-    const schemaSql = `SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ('information_schema', 'pg_catalog', 'pg_toast')`;
+    const sv = (v: string) => this.escapeValue(v);
+    // Si hay un schema configurado (?schema=X), filtramos la introspección a ese
+    // schema únicamente: el árbol de tablas y el ERD muestran solo ese schema en
+    // vez de barrer toda la base. Cada query usa el nombre de columna que le toca.
+    const schema = this._schema?.trim();
+    const schemaNameFilter = schema ? ` AND schema_name = ${sv(schema)}` : "";
+    const tableSchemaFilter = schema ? ` AND table_schema = ${sv(schema)}` : "";
+    const tcSchemaFilter = schema ? ` AND tc.table_schema = ${sv(schema)}` : "";
+    const nspFilter = schema ? ` AND n.nspname = ${sv(schema)}` : "";
+
+    const schemaSql = `SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ('information_schema', 'pg_catalog', 'pg_toast')${schemaNameFilter}`;
     const tableSql =
-      "SELECT *, pg_total_relation_size(quote_ident(table_schema) || '.' || quote_ident(table_name)) AS table_size FROM information_schema.tables WHERE table_schema NOT IN ('information_schema', 'pg_catalog', 'pg_toast');";
+      "SELECT *, pg_total_relation_size(quote_ident(table_schema) || '.' || quote_ident(table_name)) AS table_size FROM information_schema.tables WHERE table_schema NOT IN ('information_schema', 'pg_catalog', 'pg_toast')" +
+      tableSchemaFilter;
     const columnSql =
-      "SELECT * FROM information_schema.columns WHERE table_schema NOT IN ('information_schema', 'pg_catalog', 'pg_toast')";
+      "SELECT * FROM information_schema.columns WHERE table_schema NOT IN ('information_schema', 'pg_catalog', 'pg_toast')" +
+      tableSchemaFilter;
     const constraintSql = `SELECT
 	tc.constraint_name,
 	tc.table_schema,
@@ -179,17 +196,17 @@ FROM
 		ccu.constraint_name = kcu.constraint_name
 	)
 WHERE
-	tc.table_schema NOT IN ('information_schema', 'pg_catalog', 'pg_toast')`;
+	tc.table_schema NOT IN ('information_schema', 'pg_catalog', 'pg_toast')${tcSchemaFilter}`;
 
     const tableCommentSql = `SELECT n.nspname AS table_schema, c.relname AS table_name, obj_description(c.oid,'pg_class') AS comment
 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-WHERE c.relkind IN ('r','v','m','p') AND n.nspname NOT IN ('information_schema','pg_catalog','pg_toast') AND obj_description(c.oid,'pg_class') IS NOT NULL`;
+WHERE c.relkind IN ('r','v','m','p') AND n.nspname NOT IN ('information_schema','pg_catalog','pg_toast') AND obj_description(c.oid,'pg_class') IS NOT NULL${nspFilter}`;
 
     const columnCommentSql = `SELECT n.nspname AS table_schema, c.relname AS table_name, a.attname AS column_name, col_description(a.attrelid, a.attnum) AS comment
 FROM pg_attribute a
 JOIN pg_class c ON c.oid = a.attrelid
 JOIN pg_namespace n ON n.oid = c.relnamespace
-WHERE a.attnum > 0 AND NOT a.attisdropped AND n.nspname NOT IN ('information_schema','pg_catalog','pg_toast') AND col_description(a.attrelid, a.attnum) IS NOT NULL`;
+WHERE a.attnum > 0 AND NOT a.attisdropped AND n.nspname NOT IN ('information_schema','pg_catalog','pg_toast') AND col_description(a.attrelid, a.attnum) IS NOT NULL${nspFilter}`;
 
     const result = await this.batch([
       schemaSql,

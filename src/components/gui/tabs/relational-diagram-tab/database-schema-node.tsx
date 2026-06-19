@@ -7,12 +7,16 @@ import { Node, NodeProps } from "@xyflow/react";
 import { Table2 } from "lucide-react";
 import ContextMenuERD from "./context-menu-diagram";
 import ERDTableColumn from "./erd-table-column";
+import { useNodeFocusState } from "./erd-focus";
 
 export interface ERDSchemaNodeColumnProps {
   title: string;
   type: string;
   pk: boolean;
   fk: boolean;
+  // La columna es destino de una FK (PK referenciada): habilita el resaltado
+  // desde el lado "uno" de la relación.
+  referenced?: boolean;
   unique: boolean;
   nullable?: boolean;
   comment?: string;
@@ -31,6 +35,10 @@ export function DatabaseSchemaNode({
 }: NodeProps<ERDSchemaNodeProps>) {
   const schema = data.schema;
 
+  // Foco interactivo: "on" resaltado, "dim" atenuado, "none" sin selección activa.
+  const focusState = useNodeFocusState(data.label);
+  const emphasized = selected || focusState === "on";
+
   const header = (
     <h2
       className={
@@ -46,9 +54,10 @@ export function DatabaseSchemaNode({
     <div
       className={
         "min-w-[180px] overflow-hidden rounded-md border bg-white shadow-[0_0_20px_0_rgba(0,0,0,0.12)] transition-all dark:bg-[#141616] dark:shadow-[0_0_20px_0_rgba(0,0,0,0.45)] " +
-        (selected
-          ? "border-[#008543] shadow-[0_0_20px_0_rgba(29,237,131,0.35)] dark:border-[#1ded83]"
-          : "border-black/10 dark:border-white/20")
+        (emphasized
+          ? "border-[#008543] shadow-[0_0_20px_0_rgba(29,237,131,0.35)] dark:border-[#1ded83] "
+          : "border-black/10 dark:border-white/20 ") +
+        (focusState === "dim" ? "opacity-40" : "opacity-100")
       }
     >
       <ContextMenuERD tableName={data.label} schemaName={data.schemaName}>
@@ -65,7 +74,11 @@ export function DatabaseSchemaNode({
       </ContextMenuERD>
       <div>
         {schema.map((entry) => (
-          <ERDTableColumn key={entry.title} column={entry} />
+          <ERDTableColumn
+            key={entry.title}
+            column={entry}
+            tableName={data.label}
+          />
         ))}
       </div>
     </div>
