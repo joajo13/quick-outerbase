@@ -13,7 +13,7 @@
     "url": "https://github.com/joajo13/quick-outerbase/issues"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=20.9.0"
   },
   "scripts": {
     "dev": "next dev -p 3008",
@@ -43,11 +43,11 @@
     "public",
     "next.config.js",
     "tsconfig.json",
-    "next-env.d.ts",
     "postcss.config.cjs",
     "components.json",
     "build-dialect.js",
     ".eslintrc.json",
+    "LICENSE",
     "AVISO_LICENCIA.md"
   ],
   "overrides": {

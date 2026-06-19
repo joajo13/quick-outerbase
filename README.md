@@ -37,8 +37,8 @@ npx -y github:joajo13/quick-outerbase --url "mysql://user:pass@host:3306/db"
 # Turso / libSQL  (libsql://)
 npx -y github:joajo13/quick-outerbase --url "libsql://mi-db.turso.io?authToken=XXXX"
 
-# SQLite  (sqlite: o file:)  — ver nota de SQLite en Troubleshooting
-npx -y github:joajo13/quick-outerbase --url "file:/ruta/absoluta/datos.sqlite"
+# SQLite  (sqlite: o file:)  — el path relativo se resuelve contra tu carpeta actual
+npx -y github:joajo13/quick-outerbase --url "file:./datos.sqlite"
 ```
 
 Si el scheme no se reconoce, el comando aborta con un error claro y no levanta nada.
@@ -99,33 +99,49 @@ bash verify-dist.sh
 
 ## Camino futuro: publicar en npm
 
-Este paquete ya está listo para `npm publish` **sin cambios en `package.json`** (tiene `name`,
-`bin`, `files`, `engines` y el `prepare` que buildea en el install). Cuando se publique, sólo
-cambia el comando de uso:
+El esqueleto de publicación ya está (`name`, `bin`, `files`, `engines`, `prepare` que buildea en
+el install). Una vez publicado, sólo cambia el comando de uso:
 
 ```bash
 # hoy (desde GitHub)
 npx -y github:joajo13/quick-outerbase --url "..."
 
-# tras `npm publish` (mismo package.json)
+# tras `npm publish`
 npx -y quick-outerbase --url "..."
 # o instalado global:
 npm i -g quick-outerbase && quick-outerbase --url "..."
 ```
 
-Pasos: `npm login` → `npm publish --access public`. El campo `files` controla qué entra al
-tarball (código fuente + config de build; el consumidor compila vía `prepare`). No se incluye
-ningún `.env`, credencial ni base de prueba.
+> ⚠️ **Antes de `npm publish` hay UN cambio necesario.** El flujo `github:` funciona porque un
+> git-install instala también las `devDependencies`, y `prepare` compila con ellas. Pero un
+> consumidor que instala **desde el registry de npm** recibe sólo las `dependencies` (npm omite
+> las devDeps del paquete instalado), y `next build` necesita en build-time `typescript`,
+> `tailwindcss`/`@tailwindcss/postcss`/`postcss`, `shiki`/`showdown` y `eslint`/`eslint-config-next`
+> — hoy en `devDependencies`. Sin moverlas, el `prepare` del consumidor del registry fallaría.
+> Dos opciones antes de publicar:
+> 1. Mover esas deps de build a `dependencies`, **o**
+> 2. Sacar typescript+eslint del build con `typescript.ignoreBuildErrors: true` y
+>    `eslint.ignoreDuringBuilds: true` en `next.config.js`, y mover sólo `tailwindcss`/`postcss`/
+>    `shiki`/`showdown` a `dependencies`.
+>
+> Verificalo de verdad con `npm pack` + instalar el tarball en un temp con `npm install --omit=dev`
+> (simula el registry), no sólo con el clone de GitHub. **El flujo `github:` documentado arriba NO
+> está afectado por esto.**
+
+Pasos de publicación: `npm login` → `npm publish --access public`. El campo `files` controla qué
+entra al tarball. No se incluye ningún `.env`, credencial ni base de prueba.
 
 ## Troubleshooting
 
 - **`next start` da "Cannot find module './vendor-chunks/...'"**: el build se hizo en modo
   `standalone`. Recompilá con `FORK_LOCAL=1` (el bin y `prepare` ya lo hacen). Borrá `.next` y reintentá.
 - **Puerto 3008 ocupado**: usá `--port 3009`, o el comando libera el puerto al cortar con Ctrl+C.
-- **SQLite vía `npx`**: el bin corre con su `cwd` en el cache de `npx`, así que un path **relativo**
-  (`file:./db.sqlite`) se resolvería ahí, no en tu carpeta. Para SQLite local conviene un path
-  **absoluto** en macOS/Linux (`file:/home/me/db.sqlite`); en Windows, donde libsql no parsea
-  bien los drive-letters absolutos (`file:C:\...`), corré desde un clone con path relativo.
+- **SQLite vía `npx`**: el bin resuelve el path **relativo** contra **tu carpeta actual** (donde
+  corriste el comando), no contra el cache de `npx`, y le pasa a libsql una URL `file:` absoluta.
+  Así `--url "file:./datos.sqlite"` apunta a `./datos.sqlite` de tu cwd en todas las plataformas
+  (incluido Windows). También podés pasar un path absoluto directo
+  (`file:/home/me/db.sqlite` o `file:C:/Users/me/db.sqlite`). El bin loguea la ruta absoluta
+  resuelta al arrancar (`• SQLite → file:...`) para que veas qué archivo abre.
 - **Postgres y `?schema=`**: si no pasás `?schema=`, se usa `public` (se aplica al `search_path`).
 - **No conecta**: revisá el `DATABASE_URL`. El error se muestra en `/env` sin filtrar la credencial.
 

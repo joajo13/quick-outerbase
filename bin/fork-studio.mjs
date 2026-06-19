@@ -14,6 +14,19 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectDir = path.resolve(__dirname, "..");
 const isWin = process.platform === "win32";
 
+// Guard de versión: Next 15 + React 19 necesitan Node 20.9+. Fallar temprano y claro
+// (en vez de reventar adentro de next build con un error críptico).
+{
+  const [maj, min] = process.versions.node.split(".").map(Number);
+  if (maj < 20 || (maj === 20 && min < 9)) {
+    console.error(
+      `\x1b[31mNecesitás Node 20.9+ para correr esto (tenés ${process.versions.node}). ` +
+        "Actualizá Node y reintentá.\x1b[0m"
+    );
+    process.exit(1);
+  }
+}
+
 function getArg(name) {
   const i = process.argv.indexOf(name);
   return i >= 0 ? process.argv[i + 1] : undefined;
@@ -66,6 +79,26 @@ if (!scheme || !SUPPORTED.has(scheme)) {
 const redacted = url.replace(/\/\/([^:/@]+):([^@]+)@/, "//$1:***@");
 console.log(`▶ Fork-Outerbase Studio → ${scheme} (${redacted})`);
 
+// SQLite/file: resolver el path contra el cwd del USUARIO (donde se corrió el
+// comando), no contra el del proyecto. Vía `npx` el server corre con cwd = cache
+// de npx; sin esto, un `file:./mi.db` apuntaría a esa cache en lugar de a tu
+// carpeta. libsql acepta una URL file: ABSOLUTA (incl. Windows con drive-letter,
+// verificado), así que normalizamos a absoluta con forward-slashes.
+const userCwd = process.cwd();
+function normalizeDbUrl(raw) {
+  const m = raw.match(/^(sqlite|file):(.*)$/i);
+  if (!m) return raw; // postgres/mysql/libsql: sin cambios
+  const p = m[2].replace(/^\/\//, "");
+  if (!p) return raw; // sqlite en memoria u otro caso raro
+  const isAbs = path.isAbsolute(p) || /^[a-zA-Z]:[\\/]/.test(p);
+  const abs = isAbs ? p : path.resolve(userCwd, p);
+  return "file:" + abs.split("\\").join("/");
+}
+const runUrl = normalizeDbUrl(url);
+if (runUrl !== url) {
+  console.log(`• SQLite → ${runUrl}`);
+}
+
 const npmCmd = isWin ? "npm.cmd" : "npm";
 
 // 1) Instalar dependencias si faltan.
@@ -102,7 +135,7 @@ if (!noBuild && !existsSync(buildId)) {
     shell: isWin,
     env: {
       ...process.env,
-      DATABASE_URL: url,
+      DATABASE_URL: runUrl,
       NEXT_TELEMETRY_DISABLED: "1",
       FORK_LOCAL: "1",
     },
@@ -115,7 +148,7 @@ const nextBin = path.join(projectDir, "node_modules", "next", "dist", "bin", "ne
 const child = spawn(process.execPath, [nextBin, "start", "-p", port], {
   cwd: projectDir,
   stdio: "inherit",
-  env: { ...process.env, DATABASE_URL: url, PORT: port, FORK_LOCAL: "1" },
+  env: { ...process.env, DATABASE_URL: runUrl, PORT: port, FORK_LOCAL: "1" },
 });
 
 let tearingDown = false;
@@ -135,6 +168,27 @@ function teardown(code = 0) {
     }
   } catch {
     /* ya muerto */
+  }
+
+  // Cinturón y tiradores (Windows): matar cualquier resto que siga escuchando en
+  // el puerto. taskkill /T mata el árbol del child, pero si un worker se reparenta
+  // el puerto podría quedar tomado; esto lo libera igual (mismo patrón que verify).
+  if (isWin) {
+    try {
+      const out = spawnSync("netstat", ["-ano"], { encoding: "utf8" }).stdout || "";
+      const pids = new Set();
+      for (const line of out.split(/\r?\n/)) {
+        if (line.includes(":" + port + " ") && /LISTENING/i.test(line)) {
+          const pid = line.trim().split(/\s+/).pop();
+          if (pid && /^\d+$/.test(pid)) pids.add(pid);
+        }
+      }
+      for (const pid of pids) {
+        spawnSync("taskkill", ["/PID", pid, "/T", "/F"], { stdio: "ignore" });
+      }
+    } catch {
+      /* best-effort */
+    }
   }
 
   // Bajar el contenedor de prueba si lo levantamos nosotros.
