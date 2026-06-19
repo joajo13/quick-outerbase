@@ -1,52 +1,79 @@
 import { BaseHandle } from "@/components/base-handle";
-import { TableCell, TableRow } from "@/components/ui/table";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Position } from "@xyflow/react";
-import { Key } from "lucide-react";
+import { Diamond, KeyRound, Link2 } from "lucide-react";
 import { ERDSchemaNodeColumnProps } from "./database-schema-node";
+
+// Verde firma de Liam (claro/oscuro para contraste).
+const ACCENT = "text-[#008543] dark:text-[#1ded83]";
 
 export default function ERDTableColumn({
   column,
 }: {
   column: ERDSchemaNodeColumnProps;
 }) {
+  const icon = column.pk ? (
+    <KeyRound size={14} strokeWidth={1.75} className={ACCENT} />
+  ) : column.fk ? (
+    <Link2 size={14} strokeWidth={1.75} className={ACCENT} />
+  ) : column.nullable ? (
+    <Diamond size={11} strokeWidth={1.75} className="text-muted-foreground/70" />
+  ) : (
+    <Diamond
+      size={11}
+      strokeWidth={1.75}
+      className="fill-muted-foreground/70 text-muted-foreground/70"
+    />
+  );
+
+  const row = (
+    <div className="group relative grid h-8 grid-cols-[auto_1fr] items-center gap-1.5 border-b border-[#e7e8ea] px-2 last:border-b-0 last:rounded-b-md hover:bg-[#f0f1f2] dark:border-[#2c2f30] dark:hover:bg-[#383a3b]">
+      <BaseHandle
+        id={column.title}
+        type="target"
+        position={Position.Left}
+        className="!h-[8px] !w-[8px] !border-0 !bg-transparent"
+      />
+      <div className="flex w-4 items-center justify-center">{icon}</div>
+      <div className="flex items-center justify-between gap-3 overflow-hidden">
+        <span className="truncate text-xs text-[#141616] dark:text-white">
+          {column.title}
+          {column.unique && !column.pk && (
+            <span className={`ml-1 text-[9px] font-semibold ${ACCENT}`}>
+              UQ
+            </span>
+          )}
+        </span>
+        <span className="shrink-0 truncate text-right font-mono text-[10px] text-[#5f6366] dark:text-white/70">
+          {column.type}
+        </span>
+      </div>
+      <BaseHandle
+        id={column.title}
+        type="source"
+        position={Position.Right}
+        className="!h-[8px] !w-[8px] !border-0 !bg-transparent"
+      />
+    </div>
+  );
+
+  if (!column.comment) return row;
+
   return (
-    <TableRow className="group relative text-sm">
-      <TableCell className="h-[30px] p-0 pr-6 pl-2 font-mono text-sm font-light">
-        <BaseHandle
-          id={column.title}
-          type="target"
-          position={Position.Left}
-          className="h-[10px]! w-[10px]! opacity-0 group-hover:opacity-100"
-        />
-        <div className="flex h-[30px] items-center">
-          <div className="w-6">
-            {column.pk && <Key size={15} color={"rgb(153 27 27)"} />}
-            {column.fk && <Key size={15} color={"rgb(245 158 11)"} />}
-          </div>
-          <div className="max-w-[120px] truncate">{column.title}</div>
+    <Tooltip>
+      <TooltipTrigger asChild>{row}</TooltipTrigger>
+      <TooltipContent side="right" className="max-w-[260px]">
+        <div className="text-xs">
+          <span className="font-semibold">{column.title}</span> · {column.type}
         </div>
-      </TableCell>
-      <TableCell className="relative h-[30px] p-0 pr-0 text-sm font-thin">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div className="text-muted-foreground flex h-[30px] w-[100px] items-center justify-end pr-2 font-mono">
-              <div className="truncate">{column.type}</div>
-            </div>
-          </TooltipTrigger>
-          <TooltipContent side="right">{column.type}</TooltipContent>
-        </Tooltip>
-        <BaseHandle
-          id={column.title}
-          type="source"
-          position={Position.Right}
-          className="h-[10px]! w-[10px]! opacity-0 group-hover:opacity-100"
-        />
-      </TableCell>
-    </TableRow>
+        <div className="text-muted-foreground mt-0.5 text-xs">
+          {column.comment}
+        </div>
+      </TooltipContent>
+    </Tooltip>
   );
 }

@@ -47,3 +47,13 @@ yarn-error.log*
 next-env.d.ts
 
 certificates
+
+# fork: caches y artefactos de test/verify (no publicar)
+/.swc
+/shots
+*.sqlite
+*.sqlite-journal
+verify-sqlite.db
+dist-verify*.db
+/.dist-verify
+.playwright-mcp

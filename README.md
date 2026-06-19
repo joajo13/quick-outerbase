@@ -1,41 +1,138 @@
-# Outerbase Studio
+# quick-outerbase
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/outerbase/studio)
+Reemplazo personal de Prisma Studio que **se siente rápido**. Le pasás un `DATABASE_URL`
+y con **un comando** levanta una UI web local apuntada a esa base, sin configurar nada más.
+Es **agnóstico al motor**: el driver se infiere del scheme del URL.
 
-**Outerbase Studio** is a lightweight, browser-based GUI for managing SQL databases, designed for simplicity and versatility. Initially built for LibSQL and SQLite, it now supports a broad range of databases, including:
-
-**Supported Databases:**
-
-- **SQLite-based Database**
-  - Turso/LibSQL
-  - SQLite (local files)
-  - Cloudflare D1
-  - rqlite
-  - StarbaseDB
-  - Val.town
-- MySQL (beta, limited features)
-- PostgreSQL (beta, limited features)
+Fork de [Outerbase Studio](https://github.com/outerbase/studio), bajo **AGPL-3.0**
+(ver [Licencia](#licencia) y [`AVISO_LICENCIA.md`](./AVISO_LICENCIA.md)).
 
 ---
 
-Give it a try directly from your browser
+## Instalación y uso — directo desde GitHub con `npx`
 
-[![LibSQL Studio, sqlite online editor](https://github.com/user-attachments/assets/5d92ce58-9ce6-4cd7-9c65-4763d2d3b231)](https://libsqlstudio.com)
-[![Libsql studio playground](https://github.com/user-attachments/assets/dcf7e246-fe72-4351-ab10-ae2d1658087d)](https://libsqlstudio.com/playground/client?template=chinook)
+No hace falta clonar nada a mano. Necesitás **Node 20+** y npm:
 
-## Desktop App
+```bash
+npx -y github:joajo13/quick-outerbase --url "postgresql://user:pass@host:5432/midb?schema=public"
+```
 
-You can download [Windows and Mac desktop app here](https://github.com/outerbase/studio-desktop/releases/).
+`npx` clona el repo a un cache temporal, corre `npm install` (que dispara el build de
+producción en el lifecycle `prepare`) y arranca la app apuntada a tu `DATABASE_URL`,
+abriendo el browser en `http://localhost:3008/env`. Al cortar con **Ctrl+C** hace teardown
+limpio: mata el árbol de procesos y libera el puerto, sin zombies.
 
-Outerbase Studio Desktop is a lightweight Electron wrapper for the Outerbase Studio web version. It enables support for drivers that aren't feasible in a browser environment, such as MySQL and PostgreSQL.
+> La primera vez tarda (instala dependencias y compila el build de producción). `npx`
+> cachea el resultado por commit, así que las siguientes corridas arrancan al toque.
 
-## Features
+### Ejemplos por motor (el scheme define el driver)
 
-![libsqlstudio-git-preview (7)](https://github.com/user-attachments/assets/1d7a3d90-61e3-4a77-83a5-4bb096bbfb4b)
+```bash
+# PostgreSQL  (postgres:// o postgresql://)   — ?schema= estilo Prisma → search_path
+npx -y github:joajo13/quick-outerbase --url "postgresql://user:pass@host:5432/db?schema=public"
 
-- **Query Editor**: It features a user-friendly query editor equipped with auto-completion and function hint tooltips. It allows you to execute multiple queries simultaneously and view their results efficiently.
-- **Data Editor**: It comes with a powerful data editor, allowing you to stage all your changes and preview them before committing. The data table is highly optimized and lightweight, capable of rendering thousands of rows and columns efficiently.
-- **Schema Editor**: It allows you to quickly create, modify, and remove table columns with just a few clicks without writing any SQL.
-- **Connection Manager**: It includes a flexible connection manager, allowing you to store your connections locally in your browser. You can also store them on a server and share your connections across multiple devices.
+# MySQL / MariaDB  (mysql://)
+npx -y github:joajo13/quick-outerbase --url "mysql://user:pass@host:3306/db"
 
-The features mentioned above are just a few of the many we offer. Give it a try to explore everything we have in store
+# Turso / libSQL  (libsql://)
+npx -y github:joajo13/quick-outerbase --url "libsql://mi-db.turso.io?authToken=XXXX"
+
+# SQLite  (sqlite: o file:)  — ver nota de SQLite en Troubleshooting
+npx -y github:joajo13/quick-outerbase --url "file:/ruta/absoluta/datos.sqlite"
+```
+
+Si el scheme no se reconoce, el comando aborta con un error claro y no levanta nada.
+El `DATABASE_URL` siempre lo ponés vos; **nunca** se guarda ni se commitea.
+
+### Flags
+
+- `--url <connection-string>` — el `DATABASE_URL` (o usá la env `DATABASE_URL`, o pasalo posicional).
+- `--port <n>` — puerto (default 3008).
+- `--no-build` — no recompilar (reusa el build existente).
+- `--no-open` — no abrir el browser.
+- `--docker <dir>` — `docker compose up -d` en `<dir>` al arrancar y `down -v` al cortar.
+
+## Qué podés hacer en la UI
+
+- **Diagrama ERD** estilo Liam (tablas como tarjetas, PK/FK marcadas, relaciones con
+  cardinalidad, tema claro/oscuro) con **auto-arrange** (layout dagre).
+- **Estructura de tablas**: columnas, tipos, nullable, defaults, COMMENTs, PK/FK/unique/check
+  e índices (coincide con `\d` de psql en Postgres).
+- **Ver datos sin escribir SQL**: click en una tabla → grilla con filtro, orden y paginado server-side.
+- **Editor de queries** con highlighting, **autocomplete consciente del schema real** y multi-statement.
+- **Asistente LLM** (text-to-SQL y explicaciones) — Anthropic / OpenAI / Gemini.
+
+## Configurar el LLM (opcional)
+
+1. En la UI, abrí el dialog de **AI Assistant Setting**.
+2. Elegí el **provider** (Anthropic, OpenAI o Gemini), opcionalmente el **model**, y pegá tu **API key**.
+3. Guardá. La key vive **solo en el `localStorage` de tu navegador** — nunca se commitea, ni se
+   loguea, ni se manda a ningún servidor nuestro.
+
+Defaults: Anthropic `claude-opus-4-8`, OpenAI `gpt-4o-mini`, Gemini `gemini-2.0-flash`.
+
+## Correr desde un clone (desarrollo)
+
+Si querés hackear el código en vez de usar `npx`:
+
+```bash
+git clone https://github.com/joajo13/quick-outerbase.git
+cd quick-outerbase
+npm install                 # instala deps y buildea (prepare). Para saltear el build: SKIP_PREPARE_BUILD=1 npm install
+npm run studio -- --url "postgresql://user:pass@localhost:5432/midb?schema=public"
+# o `npm run dev` para el server de desarrollo de Next (hot-reload)
+```
+
+El build de producción se hace con `FORK_LOCAL=1` (lo maneja `bin/prepare-build.mjs` y el bin).
+Sin eso, Next quedaría en modo `standalone` y `next start` rompería con
+`Cannot find module './vendor-chunks/...'`.
+
+## Verificación
+
+El gate de distribución vive en el repo de desarrollo (`verify-dist.sh`): clona este repo a una
+carpeta temporal limpia, corre `npm install` (→ `prepare` → build), arranca el bin contra una
+SQLite de prueba y valida conexión, datos, diagrama (ERD) y teardown limpio del puerto.
+
+```bash
+bash verify-dist.sh
+```
+
+## Camino futuro: publicar en npm
+
+Este paquete ya está listo para `npm publish` **sin cambios en `package.json`** (tiene `name`,
+`bin`, `files`, `engines` y el `prepare` que buildea en el install). Cuando se publique, sólo
+cambia el comando de uso:
+
+```bash
+# hoy (desde GitHub)
+npx -y github:joajo13/quick-outerbase --url "..."
+
+# tras `npm publish` (mismo package.json)
+npx -y quick-outerbase --url "..."
+# o instalado global:
+npm i -g quick-outerbase && quick-outerbase --url "..."
+```
+
+Pasos: `npm login` → `npm publish --access public`. El campo `files` controla qué entra al
+tarball (código fuente + config de build; el consumidor compila vía `prepare`). No se incluye
+ningún `.env`, credencial ni base de prueba.
+
+## Troubleshooting
+
+- **`next start` da "Cannot find module './vendor-chunks/...'"**: el build se hizo en modo
+  `standalone`. Recompilá con `FORK_LOCAL=1` (el bin y `prepare` ya lo hacen). Borrá `.next` y reintentá.
+- **Puerto 3008 ocupado**: usá `--port 3009`, o el comando libera el puerto al cortar con Ctrl+C.
+- **SQLite vía `npx`**: el bin corre con su `cwd` en el cache de `npx`, así que un path **relativo**
+  (`file:./db.sqlite`) se resolvería ahí, no en tu carpeta. Para SQLite local conviene un path
+  **absoluto** en macOS/Linux (`file:/home/me/db.sqlite`); en Windows, donde libsql no parsea
+  bien los drive-letters absolutos (`file:C:\...`), corré desde un clone con path relativo.
+- **Postgres y `?schema=`**: si no pasás `?schema=`, se usa `public` (se aplica al `search_path`).
+- **No conecta**: revisá el `DATABASE_URL`. El error se muestra en `/env` sin filtrar la credencial.
+
+## Licencia
+
+**AGPL-3.0-only.** Este es un fork de [Outerbase Studio](https://github.com/outerbase/studio),
+que se distribuye bajo AGPL-3.0. Se conserva la licencia original sin relicenciar, se mantiene la
+atribución a Outerbase y el código fuente completo está disponible públicamente en este repositorio.
+Ver [`LICENSE`](./LICENSE) (texto íntegro de la AGPL) y [`AVISO_LICENCIA.md`](./AVISO_LICENCIA.md)
+(atribución, modificaciones del fork y obligaciones de copyleft).

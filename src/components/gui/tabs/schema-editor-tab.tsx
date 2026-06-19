@@ -1,6 +1,9 @@
 import OpacityLoading from "@/components/gui/loading-opacity";
 import { useStudioContext } from "@/context/driver-provider";
-import { DatabaseTableSchemaChange } from "@/drivers/base-driver";
+import {
+  DatabaseTableSchema,
+  DatabaseTableSchemaChange,
+} from "@/drivers/base-driver";
 import { generateId } from "@/lib/generate-id";
 import { createTableSchemaDraft } from "@/lib/sql/sql-generate.schema";
 import { cloneDeep } from "lodash";
@@ -29,6 +32,7 @@ export default function SchemaEditorTab({
     ...EMPTY_SCHEMA,
     schemaName,
   });
+  const [introspection, setIntrospection] = useState<DatabaseTableSchema>();
   const [loading, setLoading] = useState(!!tableName);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -37,6 +41,7 @@ export default function SchemaEditorTab({
       databaseDriver
         .tableSchema(schemaName, name)
         .then((schema) => {
+          setIntrospection(schema);
           setSchema(createTableSchemaDraft(schemaName, schema));
         })
         .catch(console.error)
@@ -102,6 +107,7 @@ export default function SchemaEditorTab({
 
       <SchemaEditor
         value={schema}
+        introspection={introspection}
         onChange={setSchema}
         onSave={onSaveToggle}
         onDiscard={onDiscard}

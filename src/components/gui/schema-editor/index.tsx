@@ -1,8 +1,18 @@
 import { useStudioContext } from "@/context/driver-provider";
-import { DatabaseTableSchemaChange } from "@/drivers/base-driver";
+import {
+  DatabaseTableSchema,
+  DatabaseTableSchemaChange,
+} from "@/drivers/base-driver";
 import { generateId } from "@/lib/generate-id";
 import { checkSchemaChange } from "@/lib/sql/sql-generate.schema";
-import { LucideCode, LucideCopy, LucidePlus, LucideSave } from "lucide-react";
+import {
+  LucideCode,
+  LucideCopy,
+  LucideKeyRound,
+  LucideList,
+  LucidePlus,
+  LucideSave,
+} from "lucide-react";
 import { Dispatch, SetStateAction, useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { Button, buttonVariants } from "../../ui/button";
@@ -20,6 +30,8 @@ interface Props {
   onDiscard: () => void;
   value: DatabaseTableSchemaChange;
   onChange: Dispatch<SetStateAction<DatabaseTableSchemaChange>>;
+  /** Original introspected schema (read-only metadata: comment, indexes, ...). */
+  introspection?: DatabaseTableSchema;
 }
 
 export default function SchemaEditor({
@@ -27,6 +39,7 @@ export default function SchemaEditor({
   onChange,
   onSave,
   onDiscard,
+  introspection,
 }: Readonly<Props>) {
   const { databaseDriver } = useStudioContext();
   const isCreateScript = value.name.old === "";
@@ -187,6 +200,13 @@ export default function SchemaEditor({
             />
           </div>
         </div>
+
+        {introspection?.comment && (
+          <div className="mx-3 mb-4 ml-5 max-w-3xl text-sm whitespace-pre-wrap text-muted-foreground">
+            {introspection.comment}
+          </div>
+        )}
+
         <Separator />
       </div>
       <div className="grow overflow-y-auto">
@@ -208,6 +228,54 @@ export default function SchemaEditor({
             disabled={!isCreateScript}
           />
         </ColumnsProvider>
+
+        {introspection?.indexes && introspection.indexes.length > 0 && (
+          <div className="px-4 py-2">
+            <div className="mb-2 flex items-center gap-2 text-sm font-medium">
+              <LucideList className="h-4 w-4" />
+              Indexes
+            </div>
+            <table className="w-full">
+              <thead>
+                <tr>
+                  <th className="border bg-secondary p-2 text-left text-xs">
+                    Name
+                  </th>
+                  <th className="border bg-secondary p-2 text-left text-xs">
+                    Columns
+                  </th>
+                  <th className="w-[120px] border bg-secondary p-2 text-left text-xs">
+                    Type
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {introspection.indexes.map((index) => (
+                  <tr key={index.name} className="text-sm">
+                    <td className="border p-2 font-mono">
+                      <div className="flex items-center gap-2">
+                        {index.primary && (
+                          <LucideKeyRound className="h-3.5 w-3.5 text-muted-foreground" />
+                        )}
+                        {index.name}
+                      </div>
+                    </td>
+                    <td className="border p-2 font-mono">
+                      {index.columns.join(", ")}
+                    </td>
+                    <td className="border p-2 text-muted-foreground">
+                      {index.primary
+                        ? "PRIMARY"
+                        : index.unique
+                          ? "UNIQUE"
+                          : "INDEX"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,6 +1,8 @@
+import { useState } from "react";
 import {
   BaseEdge,
-  getSmoothStepPath,
+  EdgeLabelRenderer,
+  getBezierPath,
   Handle,
   InternalNode,
   Node,
@@ -9,6 +11,9 @@ import {
   type Edge,
   type EdgeProps,
 } from "@xyflow/react";
+
+const EDGE_REST = "#9aa0a6";
+const EDGE_HILITE = "#1ded83";
 
 // returns the position (top,right,bottom or right) passed node compared to
 function getParams(
@@ -153,12 +158,10 @@ export default function ERDTableColumnEdge({
   target,
   sourceHandleId,
   targetHandleId,
-  markerEnd,
-  markerStart,
-  style,
 }: EdgeProps<ERDSchemaNodeColumnEdgeProps>) {
   const sourceNode = useInternalNode(source);
   const targetNode = useInternalNode(target);
+  const [hover, setHover] = useState(false);
 
   if (!sourceNode || !targetNode) {
     return null;
@@ -171,7 +174,7 @@ export default function ERDTableColumnEdge({
     targetHandleId
   );
 
-  const [edgePath] = getSmoothStepPath({
+  const [edgePath] = getBezierPath({
     sourceX: sx,
     sourceY: sy,
     sourcePosition: sourcePos,
@@ -180,13 +183,57 @@ export default function ERDTableColumnEdge({
     targetY: ty,
   });
 
+  const color = hover ? EDGE_HILITE : EDGE_REST;
+
+  // Cardinalidad: lado FK (source) = "muchos" (N), lado PK (target) = "uno" (1).
+  const badge = (
+    x: number,
+    y: number,
+    text: string,
+    show: boolean
+  ) => (
+    <div
+      style={{
+        position: "absolute",
+        transform: `translate(-50%,-50%) translate(${x}px,${y}px)`,
+        pointerEvents: "none",
+        fontSize: 10,
+        fontWeight: 700,
+        color: EDGE_HILITE,
+        opacity: show ? 1 : 0,
+        transition: "opacity 150ms",
+      }}
+      className="nodrag nopan"
+    >
+      {text}
+    </div>
+  );
+
   return (
-    <BaseEdge
-      id={id}
-      path={edgePath}
-      markerEnd={markerEnd}
-      markerStart={markerStart}
-      style={style}
-    />
+    <>
+      {/* path ancho invisible para detectar hover cómodamente */}
+      <path
+        d={edgePath}
+        fill="none"
+        stroke="transparent"
+        strokeWidth={16}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        style={{ pointerEvents: "stroke" }}
+      />
+      <BaseEdge
+        id={id}
+        path={edgePath}
+        style={{
+          stroke: color,
+          strokeWidth: hover ? 2 : 1.5,
+          transition: "stroke 150ms",
+        }}
+      />
+      <EdgeLabelRenderer>
+        {badge(sx, sy, "N", hover)}
+        {badge(tx, ty, "1", hover)}
+      </EdgeLabelRenderer>
+    </>
   );
 }

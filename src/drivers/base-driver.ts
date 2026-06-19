@@ -75,6 +75,17 @@ export interface DatabaseTableColumn {
   type: string;
   pk?: boolean;
   constraint?: DatabaseTableColumnConstraint;
+  /** COMMENT de la columna (Postgres: col_description). */
+  comment?: string;
+}
+
+export interface DatabaseTableIndex {
+  name: string;
+  columns: string[];
+  unique?: boolean;
+  primary?: boolean;
+  /** Definición textual del índice (Postgres: pg_indexes.indexdef). */
+  definition?: string;
 }
 
 export type DatabaseColumnConflict =
@@ -151,6 +162,10 @@ export interface DatabaseTableSchema {
   withoutRowId?: boolean;
   strict?: boolean;
   stats?: DatabaseTableSchemaStats;
+  /** COMMENT de la tabla (Postgres: obj_description). */
+  comment?: string;
+  /** Índices de la tabla (Postgres: pg_indexes). */
+  indexes?: DatabaseTableIndex[];
 }
 
 export type TriggerWhen = "BEFORE" | "AFTER" | "INSTEAD_OF";

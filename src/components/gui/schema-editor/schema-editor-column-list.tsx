@@ -18,8 +18,14 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { LucidePlus, LucideTrash2 } from "lucide-react";
+import { LucideMessageSquare, LucidePlus, LucideTrash2 } from "lucide-react";
 import { Dispatch, SetStateAction, useCallback, useMemo } from "react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "../../ui/tooltip";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -213,12 +219,26 @@ function ColumnItem({
         ></div>
       </td>
       <td className="border-t border-r border-b">
-        <input
-          value={column.name}
-          onChange={(e) => change({ name: e.currentTarget.value })}
-          className="w-[150px] bg-inherit p-2 text-sm outline-hidden"
-          spellCheck={false}
-        />
+        <div className="flex items-center">
+          <input
+            value={column.name}
+            onChange={(e) => change({ name: e.currentTarget.value })}
+            className="w-[150px] bg-inherit p-2 text-sm outline-hidden"
+            spellCheck={false}
+          />
+          {column.comment && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <LucideMessageSquare className="mr-1 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs whitespace-pre-wrap">
+                  {column.comment}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+        </div>
       </td>
       <td className="border">
         <ColumnItemType

@@ -1,12 +1,27 @@
 {
-  "name": "@outerbase/studio",
+  "name": "quick-outerbase",
   "version": "0.10.2",
   "private": false,
+  "description": "Fork de Outerbase Studio: tomá un DATABASE_URL y levantá una UI web local agnóstica al motor (postgres/mysql/sqlite/libsql) con un solo comando. Distribuible vía npx. Fork de outerbase/studio (AGPL-3.0).",
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/joajo13/quick-outerbase.git"
+  },
+  "homepage": "https://github.com/joajo13/quick-outerbase#readme",
+  "bugs": {
+    "url": "https://github.com/joajo13/quick-outerbase/issues"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "next dev -p 3008",
     "dev-https": "next dev --experimental-https",
     "start": "next start",
     "build": "next build",
+    "build:local": "node bin/prepare-build.mjs --force",
+    "prepare": "node bin/prepare-build.mjs",
     "tsc": "tsc --noEmit --skipLibCheck",
     "test": "jest",
     "staged": "npm run typecheck && npm run lint && jest",
@@ -14,9 +29,27 @@
     "format": "prettier --check .",
     "lint": "next lint",
     "dialect": "node build-dialect.js",
+    "studio": "node bin/fork-studio.mjs",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy"
   },
+  "bin": {
+    "quick-outerbase": "bin/fork-studio.mjs",
+    "fork-studio": "bin/fork-studio.mjs"
+  },
+  "files": [
+    "bin",
+    "src",
+    "public",
+    "next.config.js",
+    "tsconfig.json",
+    "next-env.d.ts",
+    "postcss.config.cjs",
+    "components.json",
+    "build-dialect.js",
+    ".eslintrc.json",
+    "AVISO_LICENCIA.md"
+  ],
   "overrides": {
     "@libsql/client": "^0.5.3"
   },
@@ -80,8 +113,10 @@
     "lodash": "^4.17.21",
     "lucide-react": "^0.474.0",
     "motion": "^12.4.3",
+    "mysql2": "^3.22.5",
     "next": "15.4.10",
     "next-themes": "^0.4.4",
+    "pg": "^8.21.0",
     "react": "19.0.0",
     "react-color": "^2.19.3",
     "react-dom": "19.0.0",
@@ -106,6 +141,7 @@
     "@types/jest": "^29.5.11",
     "@types/lodash": "^4.17.9",
     "@types/node": "^20",
+    "@types/pg": "^8.20.0",
     "@types/react": "^18",
     "@types/react-color": "^3.0.13",
     "@types/react-dom": "^18",
@@ -118,6 +154,7 @@
     "eslint-config-next": "14.0.4",
     "jest": "^29.7.0",
     "jest-environment-jsdom": "^29.7.0",
+    "playwright": "^1.61.0",
     "postcss": "^8.4.38",
     "prettier": "^3.2.5",
     "prettier-plugin-tailwindcss": "^0.6.11",

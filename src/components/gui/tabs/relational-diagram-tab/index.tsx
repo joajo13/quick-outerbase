@@ -11,6 +11,7 @@ import {
 } from "@phosphor-icons/react";
 import {
   Background,
+  BackgroundVariant,
   Controls,
   Edge,
   MarkerType,
@@ -96,14 +97,14 @@ function mapSchema(
             width: 14,
             height: 14,
           },
-          id: `${item.name}-${column.constraint.foreignKey.foreignTableName}`,
+          id: `${item.name}.${column.name}->${column.constraint.foreignKey.foreignTableName}`,
           source: item.name,
           target: column.constraint.foreignKey.foreignTableName || "",
           sourceHandle: column.name,
           targetHandle: column.constraint.foreignKey.foreignColumns
             ? column.constraint.foreignKey.foreignColumns[0]
             : "",
-          animated: true,
+          animated: false,
           style: {
             strokeWidth: 2,
           },
@@ -136,14 +137,14 @@ function mapSchema(
             width: 14,
             height: 14,
           },
-          id: `${item.name}-${constraint.foreignKey.foreignTableName}`,
+          id: `${item.name}.${columnName}->${constraint.foreignKey.foreignTableName}`,
           source: item.name,
           target: constraint.foreignKey.foreignTableName || "",
           sourceHandle: columnName,
           targetHandle: constraint.foreignKey.foreignColumns
             ? constraint.foreignKey.foreignColumns[0]
             : "",
-          animated: true,
+          animated: false,
           style: {
             strokeWidth: 2,
           },
@@ -151,6 +152,16 @@ function mapSchema(
       }
     }
   }
+
+  // Dedupe edges by id (un mismo FK puede llegar por la columna y por el constraint).
+  const seenEdge = new Set<string>();
+  const dedupedEdges = initialEdges.filter((e) => {
+    if (seenEdge.has(e.id)) return false;
+    seenEdge.add(e.id);
+    return true;
+  });
+  initialEdges.length = 0;
+  initialEdges.push(...dedupedEdges);
 
   // Split the schema into without relationship and with relationship
   const schemaWithRelationship = schema[selectedSchema].filter((x) => {
@@ -178,6 +189,7 @@ function mapSchema(
       data: {
         label: item.name,
         schemaName: selectedSchema,
+        comment: item.tableSchema?.comment,
         schema: item.tableSchema?.columns.map((column) => {
           return {
             title: column.name,
@@ -185,6 +197,8 @@ function mapSchema(
             pk: !!column.pk,
             fk: foreignKeyList.has(`${item.name}.${column.name}`),
             unique: !!column.constraint?.unique,
+            nullable: !column.constraint?.notNull,
+            comment: column.comment,
           };
         }),
       },
@@ -261,6 +275,7 @@ function mapSchema(
       data: {
         label: node.name,
         schemaName: selectedSchema,
+        comment: node.tableSchema?.comment,
         schema: node.tableSchema?.columns.map((column) => {
           return {
             title: column.name,
@@ -268,6 +283,8 @@ function mapSchema(
             pk: !!column.pk,
             fk: foreignKeyList.has(`${node.name}.${column.name}`),
             unique: !!column.constraint?.unique,
+            nullable: !column.constraint?.notNull,
+            comment: column.comment,
           };
         }),
       },
@@ -319,8 +336,9 @@ function LayoutFlow() {
             <LucideRefreshCcw className="h-4 w-4 text-green-600" />
           </Button>
           <Button
-            variant={"ghost"}
+            variant={"outline"}
             size={"sm"}
+            title="Reacomodar el diagrama automáticamente (dagre)"
             onClick={() => {
               if (selectedSchema) {
                 const { initialEdges, initialNodes } = mapSchema(
@@ -332,7 +350,8 @@ function LayoutFlow() {
               }
             }}
           >
-            <AlignCenterVerticalSimple size={15} />
+            <AlignCenterVerticalSimple size={15} className="mr-1" />
+            Auto arrange
           </Button>
           <Button
             variant={"ghost"}
@@ -385,10 +404,17 @@ function LayoutFlow() {
             fitView
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
+            minZoom={0.1}
           >
-            <Background bgColor={appTheme === "dark" ? "#0a0a0a" : "white"} />
+            <Background
+              variant={BackgroundVariant.Dots}
+              gap={16}
+              size={1}
+              bgColor={appTheme === "dark" ? "#141616" : "#f7f7f7"}
+              color={appTheme === "dark" ? "#393b3c" : "#d1d2d3"}
+            />
             <Controls />
-            <MiniMap />
+            <MiniMap pannable zoomable />
           </ReactFlow>
         </div>
       )}
