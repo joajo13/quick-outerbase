@@ -8,6 +8,12 @@ const fakeDriver = {
   getFlags: () => ({ dialect: "postgres", defaultSchema: "public" }),
 } as unknown as BaseDriver;
 
+function driverForDialect(dialect: string): BaseDriver {
+  return {
+    getFlags: () => ({ dialect, defaultSchema: "default" }),
+  } as unknown as BaseDriver;
+}
+
 function mockFetchOnce(jsonBody: unknown) {
   const fetchMock = jest.fn().mockResolvedValue({
     json: async () => jsonBody,
@@ -117,4 +123,61 @@ describe("LLM agent drivers — request por proveedor y parseo de respuesta", ()
     const agent = new AnthropicDriver(fakeDriver, "bad");
     await expect(agent.query(messages)).rejects.toThrow("invalid api key");
   });
+});
+
+// ---------------------------------------------------------------------------
+// getSystemContent — rama por dialecto (DynamoDB = PartiQL, resto = SQL)
+// ---------------------------------------------------------------------------
+
+describe("getSystemContent — DynamoDB usa PartiQL, no SQL genérico", () => {
+  // Cualquier driver de agente sirve: getSystemContent vive en el común.
+  const agentFor = (dialect: string) =>
+    new AnthropicDriver(driverForDialect(dialect), "KEY");
+
+  test("dynamodb (generar): enseña PartiQL y NO instruye SQL genérico", () => {
+    const sys = agentFor("dynamodb").getSystemContent({ selected: "" });
+
+    // Menciona PartiQL y DynamoDB explícitamente.
+    expect(sys).toMatch(/PartiQL/);
+    expect(sys).toMatch(/DynamoDB/);
+    // NO debe decir "You are an SQL expert" (el prompt viejo y errado).
+    expect(sys).not.toMatch(/You are an SQL expert/);
+    // Reglas clave que evitan los errores reportados (VALUES, JOINs):
+    expect(sys).toMatch(/VALUE \{/); // sintaxis de documento, no VALUES (...)
+    expect(sys).toMatch(/double quotes/i); // nombres de tabla entre comillas dobles
+    expect(sys).toMatch(/NO JOINs/);
+    // Sigue pidiendo fence ```sql porque processResult extrae ese bloque.
+    expect(sys).toMatch(/```sql/);
+  });
+
+  test("dynamodb (mejorar selección): también es PartiQL y menciona mejorar", () => {
+    const sys = agentFor("dynamodb").getSystemContent({
+      selected: "SELECT * FROM \"Users\"",
+    });
+
+    expect(sys).toMatch(/PartiQL/);
+    expect(sys).toMatch(/improve/i);
+    expect(sys).not.toMatch(/You are an SQL expert/);
+  });
+
+  test.each(["postgres", "mysql", "sqlite", "dolt", "libsql"])(
+    "%s: el prompt queda INTACTO (SQL expert, sin PartiQL)",
+    (dialect) => {
+      const generate = agentFor(dialect).getSystemContent({ selected: "" });
+      const improve = agentFor(dialect).getSystemContent({
+        selected: "SELECT 1",
+      });
+
+      // Exactamente el prompt original, byte por byte.
+      expect(generate).toBe(
+        `You are an SQL expert. User is using ${dialect}.Only return SQL code`
+      );
+      expect(improve).toBe(
+        `You are an SQL expert. User is using ${dialect}. You are given a user selected query and you will improve it. Only return SQL code`
+      );
+      // Y nunca menciona PartiQL.
+      expect(generate).not.toMatch(/PartiQL/);
+      expect(improve).not.toMatch(/PartiQL/);
+    }
+  );
 });

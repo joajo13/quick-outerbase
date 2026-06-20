@@ -17,12 +17,47 @@ export interface CommonAgentMessage {
   content: string;
 }
 
+// Reglas de PartiQL que el agente le enseña al LLM para que genere statements
+// EJECUTABLES contra DynamoDB (ExecuteStatement). Verificadas contra la doc de
+// AWS y contra DynamoDB Local en el e2e. Si tocás esto, revisá el test e2e de
+// patrones PartiQL, porque ahí se ejecutan de verdad.
+export const PARTIQL_RULES = `PartiQL rules you MUST follow:
+- Table names ALWAYS in double quotes: FROM "my-table". String values in single quotes: 'value'.
+- SELECT: SELECT * FROM "table" WHERE pk = 'x'. An efficient WHERE filters by the partition key (and the sort key if the table has one); without a key it becomes a full table scan (allowed but slow).
+- INSERT inserts a SINGLE row using document/map syntax with VALUE (never SQL "VALUES (...)"): INSERT INTO "table" VALUE {'id':'9','name':'x','count':1}
+- UPDATE: UPDATE "table" SET field='x' WHERE pk='value' [AND sk='value'] — the WHERE must pin the full primary key (partition key, plus sort key if present).
+- DELETE: DELETE FROM "table" WHERE pk='value' [AND sk='value'] — the WHERE must pin the full primary key.
+- One operation per statement. There are NO JOINs, NO subqueries, NO GROUP BY and NO complex aggregations like in relational SQL.
+- Use ONLY attributes that appear in the given schema. DynamoDB attribute types: S (string), N (number), B (binary), BOOL, NULL, L (list), M (map), SS/NS/BS (string/number/binary set).
+
+Examples of valid PartiQL:
+SELECT * FROM "Users" WHERE userId = 'u1'
+INSERT INTO "Users" VALUE {'userId':'u9','email':'a@x.com','active':true,'age':30}
+UPDATE "Users" SET email='b@x.com' WHERE userId='u1'
+DELETE FROM "Users" WHERE userId='u1'`;
+
 export default abstract class CommonAgentDriverImplementation extends AgentBaseDriver {
   protected history: Record<string, ChatHistory> = {};
 
   abstract query(messages: CommonAgentMessage[]): Promise<string>;
 
   getSystemContent(option: AgentPromptOption): string {
+    // DynamoDB no usa SQL relacional: se consulta con PartiQL. Le damos al LLM
+    // un prompt específico con las reglas + ejemplos canónicos, en vez del de
+    // "SQL expert" genérico que le hacía generar INSERT ... VALUES / JOINs que
+    // DynamoDB rechaza al parsear.
+    if (this.driver.getFlags().dialect === "dynamodb") {
+      const intro = option.selected
+        ? "You are an expert in Amazon DynamoDB PartiQL. The user is using DynamoDB, which is queried with PartiQL (NOT standard relational SQL). You are given a user-selected statement and you will improve it."
+        : "You are an expert in Amazon DynamoDB PartiQL. The user is using DynamoDB, which is queried with PartiQL (NOT standard relational SQL).";
+
+      return `${intro}
+
+${PARTIQL_RULES}
+
+Only return a single PartiQL statement, wrapped in a \`\`\`sql code block.`;
+    }
+
     if (option.selected) {
       return `You are an SQL expert. User is using ${this.driver.getFlags().dialect}. You are given a user selected query and you will improve it. Only return SQL code`;
     }
@@ -34,9 +69,20 @@ export default abstract class CommonAgentDriverImplementation extends AgentBaseD
     const parts = [];
 
     if (option.schema) {
-      parts.push(
-        "Here is " + this.driver.getFlags().dialect + " my database schema:\n\n"
-      );
+      if (this.driver.getFlags().dialect === "dynamodb") {
+        // En DynamoDB el bloque describe la estructura de cada tabla (claves y
+        // atributos vistos); la PRIMARY KEY del DDL es la partition/sort key.
+        // Las queries que generes deben ser PartiQL, no SQL relacional.
+        parts.push(
+          "Here is my DynamoDB schema (PRIMARY KEY = partition key, plus sort key if present). Query it with PartiQL:\n\n"
+        );
+      } else {
+        parts.push(
+          "Here is " +
+            this.driver.getFlags().dialect +
+            " my database schema:\n\n"
+        );
+      }
 
       parts.push(
         "```sql\n" + this.convertSchemaToDDLContent(option.schema) + "```"
