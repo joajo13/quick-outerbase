@@ -18,6 +18,9 @@ interface EnvDbInfo {
   dialect: SupportedDialect;
   name: string;
   schema: string;
+  /** Solo dynamodb: región/endpoint (sin secretos). */
+  region?: string;
+  endpoint?: string;
 }
 
 export default function EnvPageBody() {
@@ -38,7 +41,11 @@ export default function EnvPageBody() {
     if (!info) return null;
     // Pasamos el schema configurado (?schema=) para que Postgres filtre la
     // introspección a ese schema. En DBs sin schema, info.schema viene vacío.
-    return createEnvDriver(info.dialect, info.schema);
+    // Para dynamodb pasamos región/endpoint (sin creds: las pone el server).
+    return createEnvDriver(info.dialect, info.schema, {
+      region: info.region,
+      endpoint: info.endpoint,
+    });
   }, [info]);
 
   const extensions = useMemo(() => {

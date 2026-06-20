@@ -7,7 +7,15 @@
   "rules": {
     "@next/next/no-img-element": "off",
     "@typescript-eslint/no-explicit-any": "off",
-    "@typescript-eslint/ban-ts-comment": "off"
+    "@typescript-eslint/ban-ts-comment": "off",
+    "@typescript-eslint/no-unused-vars": [
+      "error",
+      {
+        "argsIgnorePattern": "^_",
+        "varsIgnorePattern": "^_",
+        "caughtErrorsIgnorePattern": "^_"
+      }
+    ]
   },
   "parser": "@typescript-eslint/parser",
   "plugins": ["@typescript-eslint"],

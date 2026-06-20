@@ -48,7 +48,9 @@ function getArg(name) {
 function positionalUrl() {
   return process.argv
     .slice(2)
-    .find((a) => /^(postgres|postgresql|mysql|mariadb|sqlite|file|libsql):/i.test(a));
+    .find((a) =>
+      /^(postgres|postgresql|mysql|mariadb|sqlite|file|libsql|dynamodb):/i.test(a)
+    );
 }
 const url = getArg("--url") || positionalUrl() || process.env.DATABASE_URL;
 const port = getArg("--port") || process.env.PORT || "3008";
@@ -63,12 +65,39 @@ if (!url) {
 
 // --- Validación del motor por el scheme ---
 const scheme = (url.match(/^([a-zA-Z][a-zA-Z0-9+.-]*):/) || [])[1]?.toLowerCase();
-const SUPPORTED = new Set(["postgres", "postgresql", "mysql", "mariadb", "sqlite", "file", "libsql"]);
+const SUPPORTED = new Set([
+  "postgres",
+  "postgresql",
+  "mysql",
+  "mariadb",
+  "sqlite",
+  "file",
+  "libsql",
+  "dynamodb",
+]);
 if (!scheme || !SUPPORTED.has(scheme)) {
   fail(
     `Scheme no reconocido: "${scheme || "(ninguno)"}". ` +
-      "Motores soportados: postgres://, postgresql://, mysql://, sqlite:/file:, libsql://"
+      "Motores soportados: postgres://, postgresql://, mysql://, sqlite:/file:, libsql://, dynamodb://<region>"
   );
+}
+
+// DynamoDB: la URL lleva SOLO región (+endpoint opcional). Las credenciales NO van
+// en la URL: las resuelve el server standalone desde la cadena estándar de AWS
+// (env AWS_ACCESS_KEY_ID/SECRET/SESSION_TOKEN, ~/.aws/credentials o IAM role),
+// heredadas vía process.env al spawnear server.js más abajo.
+if (scheme === "dynamodb") {
+  const hasEnvCreds =
+    process.env.AWS_ACCESS_KEY_ID ||
+    process.env.AWS_PROFILE ||
+    process.env.AWS_CONTAINER_CREDENTIALS_RELATIVE_URI ||
+    process.env.AWS_WEB_IDENTITY_TOKEN_FILE;
+  if (!hasEnvCreds) {
+    console.warn(
+      "\x1b[33m⚠ DynamoDB: no detecté credenciales AWS en el entorno. Si no usás un perfil " +
+        "(~/.aws/credentials) ni un IAM role, seteá AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY antes de correr.\x1b[0m"
+    );
+  }
 }
 
 // --- SQLite: resolver path relativo contra el cwd del USUARIO (no el cache) y

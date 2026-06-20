@@ -4,7 +4,12 @@ import { SupportedDialect } from "@/drivers/base-driver";
  * Motor físico inferido del scheme del DATABASE_URL.
  * `libsql` y `sqlite` mapean ambos al dialecto "sqlite" del Studio.
  */
-export type EngineKind = "postgres" | "mysql" | "sqlite" | "libsql";
+export type EngineKind =
+  | "postgres"
+  | "mysql"
+  | "sqlite"
+  | "libsql"
+  | "dynamodb";
 
 export interface ParsedDatabaseUrl {
   /** Motor físico (driver Node a usar en el route). */
@@ -19,6 +24,10 @@ export interface ParsedDatabaseUrl {
   authToken?: string;
   /** Nombre legible para mostrar en la UI (db o archivo), sin secretos. */
   displayName: string;
+  /** Región AWS (solo dynamodb). No es secreto. */
+  region?: string;
+  /** Endpoint custom (solo dynamodb, ej: http://localhost:8000). */
+  endpoint?: string;
 }
 
 const SCHEME_MAP: Record<string, EngineKind> = {
@@ -29,6 +38,7 @@ const SCHEME_MAP: Record<string, EngineKind> = {
   sqlite: "sqlite",
   file: "sqlite",
   libsql: "libsql",
+  dynamodb: "dynamodb",
 };
 
 export class DatabaseUrlError extends Error {}
@@ -66,7 +76,8 @@ export function parseDatabaseUrl(raw: string): ParsedDatabaseUrl {
   const engine = SCHEME_MAP[scheme];
 
   if (!engine) {
-    const supported = "postgres://, postgresql://, mysql://, sqlite:/file:, libsql://";
+    const supported =
+      "postgres://, postgresql://, mysql://, sqlite:/file:, libsql://, dynamodb://<region>";
     throw new DatabaseUrlError(
       `Scheme no soportado: "${scheme}://". Motores soportados: ${supported}.`
     );
@@ -75,6 +86,7 @@ export function parseDatabaseUrl(raw: string): ParsedDatabaseUrl {
   if (engine === "postgres") return parsePostgres(input);
   if (engine === "mysql") return parseMysql(input);
   if (engine === "libsql") return parseLibsql(input);
+  if (engine === "dynamodb") return parseDynamodb(input);
   return parseSqlite(input);
 }
 
@@ -119,6 +131,74 @@ function parseLibsql(input: string): ParsedDatabaseUrl {
     schema: "",
     authToken,
     displayName: u.host || "libsql",
+  };
+}
+
+/**
+ * DynamoDB: la URL lleva SOLO región + endpoint opcional. Formato:
+ *   dynamodb://<region>[?endpoint=http://localhost:8000]
+ *
+ * Las credenciales NUNCA van en la URL (quedarían en el historial del shell, en
+ * `ps`, en logs). Las resuelve el server desde la cadena estándar de AWS
+ * (env AWS_ACCESS_KEY_ID/SECRET/SESSION_TOKEN, ~/.aws/credentials o IAM role).
+ * Si alguien igual mete creds en la URL, fallamos fuerte y claro.
+ */
+function parseDynamodb(input: string): ParsedDatabaseUrl {
+  let u: URL;
+  try {
+    u = new URL(input);
+  } catch {
+    throw new DatabaseUrlError(
+      `URL de DynamoDB inválida. Usá dynamodb://<region> (ej: dynamodb://us-east-1). Recibí: "${redact(input)}"`
+    );
+  }
+
+  // Guard de seguridad: nada de credenciales en la URL.
+  if (u.username || u.password) {
+    throw new DatabaseUrlError(
+      "No pongas credenciales AWS en la URL de DynamoDB (sacá el user:pass@). " +
+        "Las credenciales se toman del entorno del server: AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY, ~/.aws/credentials (perfil) o IAM role."
+    );
+  }
+  const credParams = [
+    "accesskeyid",
+    "secretaccesskey",
+    "sessiontoken",
+    "aws_access_key_id",
+    "aws_secret_access_key",
+    "aws_session_token",
+  ];
+  for (const [key] of u.searchParams) {
+    if (credParams.includes(key.toLowerCase())) {
+      throw new DatabaseUrlError(
+        `No pongas credenciales en la URL de DynamoDB (param "${key}"). ` +
+          "Las credenciales se toman del entorno del server (env AWS_*, ~/.aws/credentials o IAM role)."
+      );
+    }
+  }
+
+  // region = host (dynamodb://us-east-1). Soportamos también ?region= por si acaso.
+  const region = (u.hostname || u.searchParams.get("region") || "").trim();
+  if (!region) {
+    throw new DatabaseUrlError(
+      "Falta la región en la URL de DynamoDB. Usá dynamodb://<region> (ej: dynamodb://us-east-1)."
+    );
+  }
+
+  const endpoint = u.searchParams.get("endpoint")?.trim() || undefined;
+
+  return {
+    engine: "dynamodb",
+    dialect: "dynamodb",
+    // Sin secretos: solo region (+endpoint). No se usa para conectar — las creds
+    // las pone el server. Lo dejamos por consistencia con el resto del shape.
+    connectionString: endpoint
+      ? `dynamodb://${region}?endpoint=${endpoint}`
+      : `dynamodb://${region}`,
+    schema: "",
+    displayName: `DynamoDB (${region})`,
+    region,
+    endpoint,
   };
 }
 

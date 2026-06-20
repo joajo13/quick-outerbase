@@ -25,6 +25,10 @@ import {
 } from "@aws-sdk/lib-dynamodb";
 import { headers } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
+import {
+  resolveDynamoClientConfig,
+  DynamoCredentialsError,
+} from "@/lib/dynamodb-credentials";
 
 // Node runtime obligatorio — el SDK de AWS usa crypto de Node para firmar SigV4
 export const runtime = "nodejs";
@@ -54,29 +58,39 @@ const COMMAND_MAP: Record<string, new (params: any) => any> = {
 };
 
 // Redacta cualquier credencial que pueda colarse en mensajes de error
-function redactCredentials(message: string, accessKeyId: string): string {
-  return message
-    .replace(new RegExp(accessKeyId, "g"), "[REDACTED_KEY_ID]")
-    .replace(/(?:secret|SecretAccessKey)[^"]*"[^"]{8,}"/gi, '"[REDACTED_SECRET]"');
+function redactCredentials(message: string, accessKeyId?: string): string {
+  let out = message;
+  if (accessKeyId) {
+    out = out.replace(new RegExp(accessKeyId, "g"), "[REDACTED_KEY_ID]");
+  }
+  return out.replace(
+    /(?:secret|SecretAccessKey)[^"]*"[^"]{8,}"/gi,
+    '"[REDACTED_SECRET]"'
+  );
 }
 
 export async function POST(req: NextRequest) {
   const headerStore = await headers();
 
-  // Las credenciales viajan en headers (igual que d1 manda el token en Authorization)
-  const accessKeyId = headerStore.get("x-aws-access-key-id");
-  const secretAccessKey = headerStore.get("x-aws-secret-access-key");
-  const region = headerStore.get("x-aws-region");
-  const endpoint = headerStore.get("x-aws-endpoint") ?? undefined;
-
-  if (!accessKeyId || !secretAccessKey || !region) {
-    return NextResponse.json(
-      {
-        error:
-          "Faltan credenciales AWS. Enviá los headers: x-aws-access-key-id, x-aws-secret-access-key, x-aws-region",
-      },
-      { status: HttpStatus.BAD_REQUEST }
-    );
+  // Dos modos:
+  //  - local-first: las creds viajan en headers x-aws-* (form del usuario).
+  //  - env/server: NO vienen creds (solo región/endpoint de la URL); el SDK las
+  //    resuelve de la cadena estándar de AWS del server (env, perfil, IAM role).
+  let resolved;
+  try {
+    resolved = resolveDynamoClientConfig({
+      accessKeyId: headerStore.get("x-aws-access-key-id"),
+      secretAccessKey: headerStore.get("x-aws-secret-access-key"),
+      sessionToken: headerStore.get("x-aws-session-token"),
+      region: headerStore.get("x-aws-region"),
+      endpoint: headerStore.get("x-aws-endpoint"),
+    });
+  } catch (e) {
+    const msg =
+      e instanceof DynamoCredentialsError
+        ? e.message
+        : "No se pudo resolver la configuración de AWS para DynamoDB.";
+    return NextResponse.json({ error: msg }, { status: HttpStatus.BAD_REQUEST });
   }
 
   let body: { action: string; params: object };
@@ -108,9 +122,10 @@ export async function POST(req: NextRequest) {
 
   try {
     const client = new DynamoDBClient({
-      region,
-      credentials: { accessKeyId, secretAccessKey },
-      ...(endpoint ? { endpoint } : {}),
+      region: resolved.region,
+      // Sin `credentials` → el SDK los resuelve de la cadena por default (modo env/server).
+      ...(resolved.credentials ? { credentials: resolved.credentials } : {}),
+      ...(resolved.endpoint ? { endpoint: resolved.endpoint } : {}),
     });
 
     // DocumentClient auto-unmarshalla los items (no hay que llamar unmarshall a mano)
@@ -126,7 +141,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ result: data });
   } catch (e) {
     const rawMessage = (e as Error).message ?? String(e);
-    const safeMessage = redactCredentials(rawMessage, accessKeyId);
+    const safeMessage = redactCredentials(
+      rawMessage,
+      resolved.credentials?.accessKeyId
+    );
 
     return NextResponse.json(
       { error: safeMessage },

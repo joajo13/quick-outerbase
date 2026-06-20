@@ -38,7 +38,9 @@ function getArg(name) {
 function positionalUrl() {
   return process.argv
     .slice(2)
-    .find((a) => /^(postgres|postgresql|mysql|mariadb|sqlite|file|libsql):/i.test(a));
+    .find((a) =>
+      /^(postgres|postgresql|mysql|mariadb|sqlite|file|libsql|dynamodb):/i.test(a)
+    );
 }
 
 const url = getArg("--url") || positionalUrl() || process.env.DATABASE_URL;
@@ -69,12 +71,31 @@ const SUPPORTED = new Set([
   "sqlite",
   "file",
   "libsql",
+  "dynamodb",
 ]);
 if (!scheme || !SUPPORTED.has(scheme)) {
   fail(
     `Scheme no reconocido: "${scheme || "(ninguno)"}". ` +
-      "Motores soportados: postgres://, postgresql://, mysql://, sqlite:/file:, libsql://"
+      "Motores soportados: postgres://, postgresql://, mysql://, sqlite:/file:, libsql://, dynamodb://<region>"
   );
+}
+
+// DynamoDB: las credenciales NO van en la URL. La URL solo lleva región (+endpoint
+// opcional para DynamoDB Local). Las creds las resuelve el server desde la cadena
+// estándar de AWS (env AWS_ACCESS_KEY_ID/SECRET/SESSION_TOKEN, ~/.aws/credentials o
+// IAM role) — heredadas vía process.env por el build/start de Next de abajo.
+if (scheme === "dynamodb") {
+  const hasEnvCreds =
+    process.env.AWS_ACCESS_KEY_ID ||
+    process.env.AWS_PROFILE ||
+    process.env.AWS_CONTAINER_CREDENTIALS_RELATIVE_URI ||
+    process.env.AWS_WEB_IDENTITY_TOKEN_FILE;
+  if (!hasEnvCreds) {
+    console.warn(
+      '\x1b[33m⚠ DynamoDB: no detecté credenciales AWS en el entorno. Si no usás un perfil ' +
+        "(~/.aws/credentials) ni un IAM role, seteá AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY antes de correr.\x1b[0m"
+    );
+  }
 }
 const redacted = url.replace(/\/\/([^:/@]+):([^@]+)@/, "//$1:***@");
 console.log(`▶ Fork-Outerbase Studio → ${scheme} (${redacted})`);

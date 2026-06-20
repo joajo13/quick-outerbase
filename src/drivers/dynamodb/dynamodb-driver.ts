@@ -24,7 +24,6 @@ import { DynamoQueryable } from "../database/dynamodb-queryable";
 import {
   columnTypeSelector,
   inferTypeFromHeader,
-  inferType,
   DynamoDBAttributeType,
 } from "./dynamodb-type";
 import { itemsToResultSet, extractAttributeNames } from "./convert-result";

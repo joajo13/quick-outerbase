@@ -1,8 +1,18 @@
 import { BaseDriver, SupportedDialect } from "@/drivers/base-driver";
 import { NodeProxyQueryable } from "@/drivers/database/node-proxy";
+import { DynamoQueryable } from "@/drivers/database/dynamodb-queryable";
+import { DynamoDriver } from "@/drivers/dynamodb/dynamodb-driver";
 import PostgresLikeDriver from "@/drivers/postgres/postgres-driver";
 import MySQLLikeDriver from "@/drivers/mysql/mysql-driver";
 import { SqliteLikeBaseDriver } from "@/drivers/sqlite-base-driver";
+
+/** Opciones extra por dialecto para el flujo env (sin secretos). */
+export interface EnvDriverOptions {
+  /** Región AWS (dynamodb). */
+  region?: string;
+  /** Endpoint custom (dynamodb, ej: DynamoDB Local). */
+  endpoint?: string;
+}
 
 /**
  * Construye el BaseDriver del Studio para el flujo por DATABASE_URL.
@@ -11,11 +21,26 @@ import { SqliteLikeBaseDriver } from "@/drivers/sqlite-base-driver";
  *
  * `schema` es el schema configurado (Prisma ?schema=X). Cuando viene, el driver
  * de Postgres filtra la introspección a ese schema (árbol y ERD muestran solo ese).
+ *
+ * DynamoDB es el caso especial: usa su propio proxy (/proxy/dynamodb) y NO recibe
+ * credenciales — solo región/endpoint. Las creds las resuelve el server desde la
+ * cadena estándar de AWS, así que nunca llegan al browser.
  */
 export function createEnvDriver(
   dialect: SupportedDialect,
-  schema?: string
+  schema?: string,
+  options?: EnvDriverOptions
 ): BaseDriver {
+  if (dialect === "dynamodb") {
+    return new DynamoDriver(
+      new DynamoQueryable("/proxy/dynamodb", {
+        region: options?.region ?? "us-east-1",
+        endpoint: options?.endpoint,
+        // sin accessKeyId/secretAccessKey: las pone el server.
+      })
+    );
+  }
+
   const queryable = new NodeProxyQueryable("/proxy/db");
 
   switch (dialect) {

@@ -3,31 +3,45 @@
  * Las credenciales AWS viajan en headers HTTP (nunca en el body) — el proxy las usa
  * server-side para instanciar el DynamoDBDocumentClient y firmar SigV4.
  *
- * El agente A (DynamoDriver) instancia este queryable así:
+ * Local-first (form): se instancia con las credenciales del usuario, que viajan
+ * en headers x-aws-* (nunca en el body):
  *   new DynamoQueryable("/proxy/dynamodb", { accessKeyId, secretAccessKey, region, endpoint? })
- * y luego llama:
+ *
+ * Env/server (autoconnect por dynamodb://<region>): se instancia SIN credenciales
+ * (solo región + endpoint opcional). No se manda ningún header de credenciales;
+ * el server las resuelve de la cadena estándar de AWS:
+ *   new DynamoQueryable("/proxy/dynamodb", { region, endpoint? })
+ *
+ * Luego:
  *   await queryable.exec("ListTables", {})
  *   await queryable.exec("Scan", { TableName: "mi-tabla" })
  */
 
-export interface DynamoCredentials {
-  accessKeyId: string;
-  secretAccessKey: string;
+export interface DynamoQueryableConfig {
   region: string;
   /** Endpoint custom (ej: http://localhost:8000 para DynamoDB Local) */
   endpoint?: string;
+  /** Credencial — opcional. Si no viene, el server resuelve de la cadena AWS. */
+  accessKeyId?: string;
+  /** Credencial — opcional. Va junto con accessKeyId. */
+  secretAccessKey?: string;
+  /** Token de sesión STS — opcional (creds temporales). */
+  sessionToken?: string;
 }
+
+/** @deprecated Usá DynamoQueryableConfig. Alias por compat. */
+export type DynamoCredentials = DynamoQueryableConfig;
 
 export class DynamoQueryable {
   private readonly proxyEndpoint: string;
-  private readonly creds: DynamoCredentials;
+  private readonly config: DynamoQueryableConfig;
 
   constructor(
     proxyEndpoint: string = "/proxy/dynamodb",
-    creds: DynamoCredentials
+    config: DynamoQueryableConfig
   ) {
     this.proxyEndpoint = proxyEndpoint;
-    this.creds = creds;
+    this.config = config;
   }
 
   /**
@@ -39,15 +53,22 @@ export class DynamoQueryable {
    * @returns       Respuesta del SDK ya unmarshalled por el DocumentClient
    */
   async exec(action: string, params: object = {}): Promise<unknown> {
-    // Armar los headers de credenciales — nunca van al body
+    // region/endpoint NO son secretos → siempre van. Las credenciales SOLO si
+    // las tenemos (modo local-first); en modo env/server no mandamos ninguna y el
+    // proxy las resuelve de la cadena AWS del server. Nunca van al body.
     const credHeaders: Record<string, string> = {
       "Content-Type": "application/json",
-      "x-aws-access-key-id": this.creds.accessKeyId,
-      "x-aws-secret-access-key": this.creds.secretAccessKey,
-      "x-aws-region": this.creds.region,
+      "x-aws-region": this.config.region,
     };
-    if (this.creds.endpoint) {
-      credHeaders["x-aws-endpoint"] = this.creds.endpoint;
+    if (this.config.endpoint) {
+      credHeaders["x-aws-endpoint"] = this.config.endpoint;
+    }
+    if (this.config.accessKeyId && this.config.secretAccessKey) {
+      credHeaders["x-aws-access-key-id"] = this.config.accessKeyId;
+      credHeaders["x-aws-secret-access-key"] = this.config.secretAccessKey;
+      if (this.config.sessionToken) {
+        credHeaders["x-aws-session-token"] = this.config.sessionToken;
+      }
     }
 
     const response = await fetch(this.proxyEndpoint, {

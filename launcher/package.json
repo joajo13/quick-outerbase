@@ -1,7 +1,7 @@
 {
   "name": "quick-outerbase",
-  "version": "0.3.6",
-  "description": "Launcher de quick-outerbase: baja un runtime precompilado y levanta una UI web local para tu DATABASE_URL (postgres/mysql/sqlite/libsql) en segundos. Fork de Outerbase Studio (AGPL-3.0).",
+  "version": "0.4.0",
+  "description": "Launcher de quick-outerbase: baja un runtime precompilado y levanta una UI web local para tu DATABASE_URL (postgres/mysql/sqlite/libsql/dynamodb) en segundos. Fork de Outerbase Studio (AGPL-3.0).",
   "license": "AGPL-3.0-only",
   "bin": {
     "quick-outerbase": "launcher.mjs"
@@ -27,6 +27,7 @@
     "mysql",
     "sqlite",
     "libsql",
+    "dynamodb",
     "prisma-studio",
     "gui"
   ]

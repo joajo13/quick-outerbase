@@ -25,6 +25,10 @@ export async function GET() {
       dialect: parsed.dialect,
       name: parsed.displayName,
       schema: parsed.schema,
+      // Solo dynamodb: región/endpoint (NO secretos) para que el cliente arme el
+      // driver. undefined en el resto → JSON.stringify los omite.
+      region: parsed.region,
+      endpoint: parsed.endpoint,
     });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 400 });
