@@ -217,6 +217,12 @@ export interface CommonConnectionConfig {
 
   // Starbase specified configuration
   starbase_type?: string;
+
+  // DynamoDB specific fields
+  awsAccessKeyId?: string;
+  awsSecretAccessKey?: string;
+  awsRegion?: string;
+  awsEndpoint?: string;
 }
 
 interface CommonConnectionConfigColumn {

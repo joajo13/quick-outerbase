@@ -6,7 +6,7 @@ import {
   SQLiteIcon,
   TursoIcon,
 } from "../icons/outerbase-icon";
-import { CloudflareIcon, StarbaseIcon, ValTownIcon } from "./icon";
+import { CloudflareIcon, DynamoDBIcon, StarbaseIcon, ValTownIcon } from "./icon";
 import {
   BoardVisual,
   GeneralVisual,
@@ -33,6 +33,7 @@ export function getDatabaseFriendlyName(type: string) {
   if (type === "bigquery") return "BigQuery";
   if (type === "valtown") return "ValTown";
   if (type === "board") return "Board";
+  if (type === "dynamodb") return "Amazon DynamoDB";
 
   return type;
 }
@@ -52,6 +53,7 @@ export function getDatabaseIcon(type: string) {
   if (type === "rqlite") return RqliteIcon;
   if (type === "sqlite") return SQLiteIcon;
   if (type === "board") return ChartBar;
+  if (type === "dynamodb") return DynamoDBIcon;
 
   return Database;
 }
@@ -69,5 +71,6 @@ export function getDatabaseColor(type: string) {
   if (type === "cloudflare" || type === "cloudflare-d1") return "yellow";
   if (type === "starbasedb" || type === "starbase") return "rainbow";
   if (type === "libsql" || type === "turso") return "green";
+  if (type === "dynamodb") return "yellow";
   return "default";
 }

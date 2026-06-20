@@ -7,6 +7,10 @@ import {
   DatabaseTableSchema,
 } from "@/drivers/base-driver";
 import { ColumnType } from "@outerbase/sdk-transform";
+import {
+  inferType,
+  type DynamoDBAttributeType,
+} from "@/drivers/dynamodb/dynamodb-type";
 import { LucideKey, LucideKeySquare, LucideSigma } from "lucide-react";
 
 export interface BuildTableResultProps {
@@ -265,10 +269,54 @@ export function pipeColumnIcon(
   }
 }
 
+/**
+ * DynamoDB tiene un schema sparse y heterogéneo: cada item puede tener
+ * atributos distintos, y el `tableSchema` solo conoce las key attributes (PK/SK)
+ * más una muestra de atributos no-clave. El path SQL normal descartaría o
+ * perdería el tipo de las columnas que no estén en el schema.
+ *
+ * Esta rama es ESPECÍFICA de DynamoDB y NO altera el comportamiento SQL:
+ * - Los headers ya vienen del DatabaseResultSet (unión completa de keys del Scan,
+ *   con PK/SK primero gracias a itemsToResultSet) → no se descarta ninguna columna.
+ * - Preserva el `originalType` (tipo DynamoDB: S/N/M/L/...) que pipeWithTableSchema
+ *   habría sobreescrito con undefined para atributos fuera del schema.
+ * - Marca PK/SK con isPrimaryKey y deja TODAS las columnas read-only (Wave 2 no
+ *   implementa updateTableData para DynamoDB todavía).
+ */
+function pipeDynamoSparseSchema(
+  headers: OptimizeTableHeaderProps<TableHeaderMetadata>[],
+  { tableSchema }: BuildTableResultProps
+) {
+  const pkSet = new Set(
+    (tableSchema?.pk ?? []).map((p) => p.toLowerCase())
+  );
+
+  for (const header of headers) {
+    // El originalType viene del DatabaseResultSet (convert-result lo infiere por
+    // valor). Lo guardamos como dynamoType y lo dejamos intacto en metadata.
+    header.metadata.isDynamoAttribute = true;
+    header.metadata.dynamoType = header.metadata.originalType;
+    // El path SQL setea metadata.type vía pipeWithTableSchema; la rama dynamo lo
+    // saltea, así que lo seteamos acá. Sin un ColumnType definido el grid recibe
+    // headers a medio formar (varias rutas del render asumen type presente).
+    header.metadata.type = inferType(
+      header.metadata.originalType as DynamoDBAttributeType
+    );
+
+    // PK/SK marcadas como primary key para el icono y semántica.
+    if (pkSet.has(header.name.toLowerCase())) {
+      header.metadata.isPrimaryKey = true;
+    }
+
+    // Wave 2: toda la grilla DynamoDB es read-only (sin edición todavía).
+    header.setting.readonly = true;
+  }
+}
+
 export function buildTableResultHeader(
   props: BuildTableResultProps
 ): OptimizeTableHeaderProps<TableHeaderMetadata>[] {
-  const { result } = props;
+  const { result, driver } = props;
 
   const headers = result.headers.map((column) => {
     let from: { schema: string; table: string; column: string } | null = null;
@@ -298,6 +346,18 @@ export function buildTableResultHeader(
       },
     } as OptimizeTableHeaderProps<TableHeaderMetadata>;
   });
+
+  // DynamoDB: rama dedicada para schema sparse. Se saltan los pipes SQL que
+  // dependen de un schema fijo (pipeWithTableSchema sobreescribiría el
+  // originalType y pipeEditableTable habilitaría edición no soportada aún).
+  const isDynamo = driver.getFlags().dialect === "dynamodb";
+
+  if (isDynamo) {
+    pipeDynamoSparseSchema(headers, props);
+    pipeCalculateInitialSize(headers, props);
+    pipeColumnIcon(headers);
+    return headers;
+  }
 
   pipeWithTableSchema(headers, props);
   pipeAttachColumnViaSchemas(headers, props);

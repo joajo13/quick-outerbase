@@ -26,7 +26,7 @@ export function describeTableColumnType(type: ColumnType) {
   }
 }
 
-export type SupportedDialect = "sqlite" | "mysql" | "postgres" | "dolt";
+export type SupportedDialect = "sqlite" | "mysql" | "postgres" | "dolt" | "dynamodb";
 export type SqlOrder = "ASC" | "DESC";
 export type DatabaseRow = Record<string, unknown>;
 

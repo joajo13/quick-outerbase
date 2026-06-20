@@ -54,6 +54,9 @@
     "@libsql/client": "^0.5.3"
   },
   "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.777.0",
+    "@aws-sdk/lib-dynamodb": "^3.777.0",
+    "@aws-sdk/util-dynamodb": "^3.777.0",
     "@codemirror/lang-json": "^6.0.1",
     "@codemirror/lang-sql": "^6.5.5",
     "@codemirror/merge": "^6.8.0",

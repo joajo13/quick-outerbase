@@ -22,6 +22,8 @@ export function getSQLStatementType(statement: string): SQLStatementType {
   // Replace the "IF NOT EXISTS" clause with an empty string
   trimmed = trimmed.replace("IF NOT EXISTS", "");
 
+  // Nota: PartiQL (DynamoDB) usa SELECT/INSERT INTO/UPDATE/DELETE — los tres primeros
+  // caen naturalmente en sus ramas; DELETE queda como "OTHER" (correcto, no hay DROP en PartiQL).
   if (trimmed.startsWith("SELECT")) return "SELECT";
   if (trimmed.startsWith("INSERT")) return "INSERT";
   if (trimmed.startsWith("UPDATE")) return "UPDATE";

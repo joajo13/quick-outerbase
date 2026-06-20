@@ -95,15 +95,29 @@ export default function useTableVisibilityRecalculation({
   const recalculateVisible = useCallback(
     (e: HTMLDivElement) => {
       const headerSizes = state.getHeaderWidth();
-      setVisibleDebounce(
-        getVisibleCellRange(
-          e,
-          headers.map((header) => headerSizes[header.index]) as number[],
-          totalRowCount,
-          rowHeight,
-          renderAhead,
-          state.gutterColumnWidth
-        )
+      const next = getVisibleCellRange(
+        e,
+        headers.map((header) => headerSizes[header.index]) as number[],
+        totalRowCount,
+        rowHeight,
+        renderAhead,
+        state.gutterColumnWidth
+      );
+
+      // Bail-out de igualdad: si el rango visible no cambió, devolvemos el MISMO
+      // objeto por identidad. React entonces NO re-renderiza (Object.is). Esto
+      // rompe el ciclo recalculate→setState→re-render→re-suscripción del
+      // ResizeObserver→callback inicial síncrono→recalculate… que en el browser
+      // real (con layout y observación inicial síncrona en cada observe()) puede
+      // no converger. Sin esto, getVisibleCellRange devuelve SIEMPRE un objeto
+      // nuevo y fuerza un re-render por cada medición, alimentando el feedback.
+      setVisibleDebounce((prev) =>
+        prev.rowStart === next.rowStart &&
+        prev.rowEnd === next.rowEnd &&
+        prev.colStart === next.colStart &&
+        prev.colEnd === next.colEnd
+          ? prev
+          : next
       );
     },
     [setVisibleDebounce, totalRowCount, rowHeight, renderAhead, headers, state]

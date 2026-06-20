@@ -44,6 +44,89 @@ function determineCellType(value: unknown) {
   return undefined;
 }
 
+/**
+ * Formatea un valor DynamoDB no-escalar (Map/List/Set/Binary) a un string
+ * legible para la grilla. Los items ya vienen unmarshalled por el DocumentClient,
+ * así que:
+ *  - M  → objeto JS plano → JSON
+ *  - L  → array JS → JSON
+ *  - SS → Set<string> (o array) de strings
+ *  - NS → Set/array de números
+ *  - BS → Set/array de binarios → conteo
+ *  - B  → Uint8Array/ArrayBuffer → base64 corto
+ */
+// Tope de caracteres que generamos para una celda. La grilla solo muestra una
+// línea con ellipsis, así que serializar megabytes es puro desperdicio: se hace
+// de forma SÍNCRONA en el render de CADA celda visible y se REPITE en cada
+// re-render (scroll, focus, resize). Un único documento/binario grande de
+// DynamoDB (Map/List/Binary anidado, hasta 400 KB por item) multiplicado por
+// las celdas visibles y los re-renders clava el main thread → "freeze" sin log.
+// Con este tope el costo por celda es O(1) respecto al tamaño del valor.
+const DYNAMO_CELL_MAX_CHARS = 4096;
+
+// Binario: cuenta los bytes a partir de la forma REAL que llega del proxy.
+// El DocumentClient marshalla B como Uint8Array, pero el round-trip JSON del
+// proxy (NextResponse.json → response.json) lo convierte en un objeto plano
+// { "0": .., "1": .. }. Por eso solo informamos el tamaño, sin recorrer bytes.
+function dynamoBinarySummary(v: unknown): string {
+  let length: number | undefined;
+  if (v instanceof Uint8Array || v instanceof ArrayBuffer) {
+    length = (v as Uint8Array).byteLength ?? (v as Uint8Array).length;
+  } else if (Array.isArray(v)) {
+    length = v.length;
+  } else if (v && typeof v === "object") {
+    // objeto plano con claves numéricas (binario tras el round-trip del proxy)
+    length = Object.keys(v).length;
+  }
+  return length === undefined ? "[binary]" : `{ ${length} bytes }`;
+}
+
+function safeStringify(v: unknown): string {
+  try {
+    return JSON.stringify(v) ?? String(v);
+  } catch {
+    return String(v);
+  }
+}
+
+function formatDynamoComplexValue(value: unknown, dynamoType?: string): string {
+  // Sets: el DocumentClient los entrega como Set<...>; los normalizamos a array.
+  const toArray = (v: unknown): unknown[] => {
+    if (v instanceof Set) return Array.from(v);
+    if (Array.isArray(v)) return v;
+    return [v];
+  };
+
+  let out: string;
+  try {
+    switch (dynamoType) {
+      case "B":
+      case "BS":
+        // Nunca serializamos binarios completos: solo un resumen de tamaño.
+        return dynamoBinarySummary(value);
+      case "SS":
+        out = safeStringify(toArray(value));
+        break;
+      case "NS":
+        out = safeStringify(toArray(value).map((n) => Number(n)));
+        break;
+      case "M":
+      case "L":
+      default:
+        // Map/List (o fallback): JSON. value ya es objeto/array JS plano.
+        out = safeStringify(value);
+        break;
+    }
+  } catch {
+    out = String(value);
+  }
+
+  // Tope duro: una celda nunca muestra (ni procesa para mostrar) megabytes.
+  return out.length > DYNAMO_CELL_MAX_CHARS
+    ? out.slice(0, DYNAMO_CELL_MAX_CHARS) + "…"
+    : out;
+}
+
 function CloudflareKvValue({
   props,
 }: {
@@ -113,6 +196,38 @@ function CloudflareKvValue({
   );
 }
 
+// DynamoDB: atributos complejos (Map/List/Set/Binary). Es un COMPONENTE (no JSX
+// inline en el renderer) para poder memoizar `formatDynamoComplexValue` con
+// useMemo: el renderer de celda se re-ejecuta en cada re-render de la grilla
+// (scroll, focus, resize), y sin memo re-serializaríamos el valor cada vez.
+function DynamoComplexValue({
+  props,
+}: {
+  props: OptimizeTableCellRenderProps<TableHeaderMetadata>;
+}) {
+  const { y, x, state, header, isFocus } = props;
+
+  const display = useMemo(
+    () => formatDynamoComplexValue(state.getValue(y, x), header.metadata.dynamoType),
+    [y, x, state, header.metadata.dynamoType]
+  );
+
+  return (
+    <TextCell
+      header={header}
+      state={state}
+      editor={detectTextEditorType(display)}
+      editMode={false}
+      value={display}
+      valueType={ColumnType.TEXT}
+      focus={isFocus}
+      onChange={() => {
+        /* read-only en Wave 2: M/L/sets no son editables todavía */
+      }}
+    />
+  );
+}
+
 export default function tableResultCellRenderer(
   props: OptimizeTableCellRenderProps<TableHeaderMetadata>
 ) {
@@ -129,6 +244,19 @@ export default function tableResultCellRenderer(
     header.metadata?.from?.column === "value"
   ) {
     return <CloudflareKvValue props={props} />;
+  }
+
+  // DynamoDB: atributos complejos (Map/List/Set/Binary) se renderizan como
+  // JSON/representación legible en vez de caer en BlobCell (que mostraría basura
+  // al hacer Uint8Array.from sobre un objeto). Los escalares (S/N/BOOL/NULL)
+  // siguen el path normal de abajo.
+  if (
+    header.metadata.isDynamoAttribute &&
+    value !== null &&
+    value !== undefined &&
+    typeof value === "object"
+  ) {
+    return <DynamoComplexValue props={props} />;
   }
 
   switch (valueType ?? header.metadata.type) {

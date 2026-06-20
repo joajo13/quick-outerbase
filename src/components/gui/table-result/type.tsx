@@ -22,4 +22,15 @@ export interface TableHeaderMetadata {
   originalType?: string;
 
   columnSchema?: DatabaseTableColumn;
+
+  // ---------------------------------------------------------------------------
+  // DynamoDB (schema sparse / heterogéneo). Flags opcionales: no afectan el
+  // path SQL, que nunca los setea.
+  // ---------------------------------------------------------------------------
+
+  /** True si la columna proviene de un atributo DynamoDB (no de un schema SQL). */
+  isDynamoAttribute?: boolean;
+
+  /** Tipo nativo DynamoDB de la columna (S, N, B, M, L, SS, NS, BS, BOOL, NULL). */
+  dynamoType?: string;
 }

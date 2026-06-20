@@ -52,6 +52,10 @@ export default function ClientPageBody() {
       return new StudioExtensionManager(createSQLiteExtensions());
     } else if (dialet === "postgres") {
       return new StudioExtensionManager(createPostgreSQLExtensions());
+    } else if (dialet === "dynamodb") {
+      // DynamoDB usa extensiones estándar — no tiene DDL ni triggers SQL-específicos.
+      // Waves futuras pueden agregar extensiones propias de DynamoDB acá.
+      return new StudioExtensionManager(createStandardExtensions());
     }
 
     return new StudioExtensionManager(createStandardExtensions());

@@ -25,6 +25,7 @@ import {
 import { createVariableHighlightPlugin } from "@/components/editor/sql-editor/variable-highlight-plugin";
 import AgentDriverList from "@/drivers/agent/list";
 import { SupportedDialect } from "@/drivers/base-driver";
+import { partiqlDialect } from "@/drivers/dynamodb/partiql-dialect";
 import sqliteFunctionList from "@/drivers/sqlite/function-tooltip.json";
 import { sqliteDialect } from "@/drivers/sqlite/sqlite-dialect";
 import { KEY_BINDING } from "@/lib/key-matcher";
@@ -178,6 +179,13 @@ const SqlEditor = forwardRef<ReactCodeMirrorRef, SqlEditorProps>(
       } else if (dialect === "postgres") {
         sqlDialect = sql({
           dialect: PostgresDialect,
+          schema,
+        });
+      } else if (dialect === "dynamodb") {
+        // PartiQL no tiene function-tooltips específicos de SQL; solo el dialecto.
+        // Schema también se pasa para que el autocompletado de nombres de tabla funcione cuando esté disponible.
+        sqlDialect = sql({
+          dialect: partiqlDialect,
           schema,
         });
       } else {

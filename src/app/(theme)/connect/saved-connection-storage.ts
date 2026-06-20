@@ -5,7 +5,8 @@ export type SupportedDriver =
   | "starbase"
   | "cloudflare-d1"
   | "cloudflare-wae"
-  | "sqlite-filehandler";
+  | "sqlite-filehandler"
+  | "dynamodb";
 
 export type SavedConnectionStorage = "remote" | "local";
 export type SavedConnectionLabel = "gray" | "red" | "yellow" | "green" | "blue";
@@ -34,6 +35,10 @@ export interface SavedConnectionItemConfigConfig {
   password?: string;
   database?: string;
   filehandler?: string;
+  awsAccessKeyId?: string;
+  awsSecretAccessKey?: string;
+  awsRegion?: string;
+  awsEndpoint?: string;
 }
 
 export interface SavedConnectionItemConfig {
@@ -58,4 +63,8 @@ export interface SavedConnectionRawLocalStorage {
   description?: string;
   last_used?: number;
   starbase_type?: string;
+  awsAccessKeyId?: string;
+  awsSecretAccessKey?: string;
+  awsRegion?: string;
+  awsEndpoint?: string;
 }

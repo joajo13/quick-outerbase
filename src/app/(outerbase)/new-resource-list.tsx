@@ -5,6 +5,7 @@ import {
 } from "@/components/icons/outerbase-icon";
 import {
   CloudflareIcon,
+  DynamoDBIcon,
   RQLiteIcon,
   StarbaseIcon,
   TursoIcon,
@@ -77,6 +78,12 @@ export function getCreateResourceTypeList(
       name: "rqlite",
       icon: RQLiteIcon,
       href: workspaceId ? "" : "/local/new-base/rqlite",
+    },
+    {
+      name: "Amazon DynamoDB",
+      icon: DynamoDBIcon,
+      href: workspaceId ? "" : "/local/new-base/dynamodb",
+      colorClassName: "text-orange-500",
     },
   ].filter((resource) => resource.href);
 }

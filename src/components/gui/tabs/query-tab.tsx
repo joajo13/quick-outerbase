@@ -96,7 +96,13 @@ export default function QueryWindow({
     const timer = setTimeout(() => {
       setPlaceholders((prev) => {
         const newPlaceholders: Record<string, string> = {};
-        const token = tokenizeSql(code, databaseDriver.getFlags().dialect);
+        // tokenizeSql (de @outerbase/sdk-transform) no conoce "dynamodb";
+        // PartiQL se tokeniza igual que SQL para detectar placeholders.
+        const dialect = databaseDriver.getFlags().dialect;
+        const token = tokenizeSql(
+          code,
+          dialect === "dynamodb" ? "sqlite" : dialect
+        );
 
         const foundPlaceholders = token
           .filter((t) => t.type === "PLACEHOLDER")
@@ -166,9 +172,10 @@ export default function QueryWindow({
       setQueryTabIndex(0);
 
       for (let i = 0; i < finalStatements.length; i++) {
+        const tokenizeDialect = databaseDriver.getFlags().dialect;
         const token = tokenizeSql(
           finalStatements[i],
-          databaseDriver.getFlags().dialect
+          tokenizeDialect === "dynamodb" ? "sqlite" : tokenizeDialect
         );
 
         // Defensive measurement
