@@ -92,7 +92,7 @@ jobs:
           subject-path: quick-outerbase-${{ matrix.target }}.tar.gz
 
       - name: Subir asset al Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.event.inputs.tag || github.ref_name }}
           files: quick-outerbase-${{ matrix.target }}.tar.gz
@@ -158,7 +158,7 @@ jobs:
 
       # checksums.json también como asset del Release (visible/auditable fuera de npm).
       - name: Subir checksums.json al Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.event.inputs.tag || github.ref_name }}
           files: launcher/checksums.json
