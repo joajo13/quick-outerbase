@@ -1,11 +1,45 @@
 # quick-outerbase
 
-Reemplazo personal de Prisma Studio que **se siente rápido**. Le pasás un `DATABASE_URL`
-y con **un comando** levanta una UI web local apuntada a esa base, sin configurar nada más.
-Es **agnóstico al motor**: el driver se infiere del scheme del URL.
+**Una GUI de base de datos que vive en tu terminal.** Le pasás un `DATABASE_URL` y con
+**un solo comando** te levanta una **UI web local** para explorar, consultar y editar tu
+base — sin instalar nada pesado, sin cuentas, sin configurar nada. El driver se infiere
+del scheme del URL.
 
-Fork de [Outerbase Studio](https://github.com/outerbase/studio), bajo **AGPL-3.0**
-(ver [Licencia](#licencia) y [`AVISO_LICENCIA.md`](./AVISO_LICENCIA.md)).
+```bash
+npx quick-outerbase --url "postgresql://user:pass@host:5432/midb?schema=public"
+```
+
+Pensado para devs que ya usan **Prisma**, **Drizzle**, **Turso** o **DynamoDB** y quieren
+mirar su base al toque, sin abrir una app de escritorio que tarda más en arrancar que la
+query. Es una alternativa **open-source** y multi-motor a **Prisma Studio**, **Drizzle
+Studio**, **DbGate**, **TablePlus** y **Outerbase Studio**.
+
+**Motores:** PostgreSQL · MySQL/MariaDB · SQLite · libSQL/Turso · DynamoDB.
+
+> ⚠️ **Fork no oficial de la comunidad.** `quick-outerbase` es un fork independiente de
+> [Outerbase Studio](https://github.com/outerbase/studio), **no está afiliado ni
+> respaldado por Outerbase**. Se distribuye bajo **AGPL-3.0** conservando la licencia y la
+> atribución originales (ver [Licencia](#licencia) y [`AVISO_LICENCIA.md`](./AVISO_LICENCIA.md)).
+
+## ¿Por qué quick-outerbase? (comparación honesta)
+
+| | quick-outerbase | Prisma Studio | Drizzle Studio | DbGate | TablePlus | Outerbase Studio (oficial) |
+|---|---|---|---|---|---|---|
+| **Arranque** | `npx`, un comando | atado a tu proyecto Prisma | atado a tu proyecto Drizzle | instalar app/Docker | instalar app nativa | web/app + cuenta |
+| **Multi-motor en una herramienta** | ✅ PG, MySQL, SQLite, libSQL, DynamoDB | ❌ (vía Prisma) | ❌ (vía Drizzle) | ✅ muchos | ✅ muchos | ✅ varios |
+| **DynamoDB** | ✅ (CRUD + PartiQL) | ❌ | ❌ | parcial | ✅ | ❌ |
+| **Diagrama ERD** | ✅ incluido | ❌ | ❌ | ✅ | ✅ | parcial |
+| **Asistente LLM (text-to-SQL)** | ✅ (key local) | ❌ | ❌ | ❌ | ✅ (de pago) | ✅ |
+| **Corre 100% local / loopback** | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ (cloud) |
+| **Open source** | ✅ AGPL-3.0 | ❌ | ✅ | ✅ | ❌ | ✅ AGPL |
+| **Precio** | gratis | gratis | gratis | gratis/Pro | de pago | freemium |
+
+**Siendo honestos:** TablePlus es una app nativa mucho más madura (multi-conexión,
+performance, features) — si vivís en un cliente de DB todo el día, pagalo. La Outerbase
+Studio **oficial** suma cuentas, cloud y colaboración que este fork **no** tiene.
+quick-outerbase brilla cuando querés **mirar/editar una base puntual, rápido, desde la
+terminal, sin instalar una app** — y cuando necesitás varios motores (incluido DynamoDB)
+con una sola herramienta.
 
 ---
 
@@ -54,6 +88,13 @@ npx -y github:joajo13/quick-outerbase --url "libsql://mi-db.turso.io?authToken=X
 
 # SQLite  (sqlite: o file:)  — el path relativo se resuelve contra tu carpeta actual
 npx -y github:joajo13/quick-outerbase --url "file:./datos.sqlite"
+
+# DynamoDB  (dynamodb://<region>)  — las CREDENCIALES NO van en la URL: las resuelve el
+# server desde la cadena estándar de AWS (env AWS_ACCESS_KEY_ID/SECRET, ~/.aws o IAM role).
+AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... \
+  npx -y github:joajo13/quick-outerbase --url "dynamodb://us-east-1"
+# DynamoDB Local (Docker): pasá el endpoint en la query
+npx -y github:joajo13/quick-outerbase --url "dynamodb://us-east-1?endpoint=http://localhost:8000"
 ```
 
 Si el scheme no se reconoce, el comando aborta con un error claro y no levanta nada.
@@ -101,6 +142,32 @@ npm run studio -- --url "postgresql://user:pass@localhost:5432/midb?schema=publi
 El build de producción se hace con `FORK_LOCAL=1` (lo maneja `bin/prepare-build.mjs` y el bin).
 Sin eso, Next quedaría en modo `standalone` y `next start` rompería con
 `Cannot find module './vendor-chunks/...'`.
+
+## Modelo de red y seguridad
+
+quick-outerbase es una herramienta **local de un solo usuario**. Tené en cuenta:
+
+- **Bind a loopback por default.** El server escucha en `127.0.0.1` (`HOSTNAME=127.0.0.1`)
+  y **no tiene autenticación** — algo correcto para una herramienta local. **No** lo
+  expongas en `0.0.0.0` ni en una interfaz pública sin poner tu propia auth/reverse-proxy
+  delante. Si lo hacés, cualquiera en la red podría operar tu base.
+- **Tu `DATABASE_URL` es tuyo.** Nunca se persiste ni se commitea; la credencial se
+  **redacta** en los logs y no se manda a ningún servidor nuestro.
+- **API keys del LLM** viven **solo** en el `localStorage` de tu navegador.
+- **Integridad del runtime (desde v0.5.0).** El paquete npm es un launcher fino que baja
+  el runtime precompilado desde GitHub Releases. El launcher **verifica el SHA-256** del
+  bundle descargado contra un `checksums.json` que viaja **firmado dentro del paquete
+  npm**, y los bundles se publican **desde CI con provenance** (npm provenance + GitHub
+  artifact attestations). Si el bundle no matchea el checksum esperado, el launcher
+  **aborta** antes de ejecutar nada. El override `QUICK_OUTERBASE_BUNDLE` (testing/offline)
+  saltea la verificación a propósito: usalo solo con bundles en los que confiás.
+- **Subset de entorno.** Al runtime se le pasa solo un subset whitelisteado de variables
+  de entorno (AWS\_\*, Node/Next y lo del sistema), no todo `process.env`.
+- **Riesgo bajo aceptado:** la extracción del bundle usa el `tar` del PATH del sistema
+  (Windows 10+ lo trae). Se mantiene así para preservar el principio de **cero
+  dependencias de runtime** del launcher.
+
+Para reportar un problema de seguridad, ver [`SECURITY.md`](./SECURITY.md).
 
 ## Verificación
 

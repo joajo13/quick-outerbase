@@ -1,8 +1,10 @@
 name: release-bundles
 
-# Buildea el runtime `standalone` precompilado por plataforma y lo sube como
-# asset del Release. El launcher npm (`quick-outerbase`) baja el asset que
-# matchea la plataforma del usuario. Disparar pusheando un tag `vX.Y.Z`.
+# Buildea el runtime `standalone` precompilado por plataforma, lo sube como asset del
+# Release, calcula su sha256 y, en un job final, junta los checksums en checksums.json,
+# lo embebe DENTRO del paquete npm (cadena de confianza, C1) y publica el launcher a
+# npm CON PROVENANCE (A1). Además attesta cada .tar.gz (build provenance).
+# Disparar pusheando un tag `vX.Y.Z`.
 on:
   push:
     tags:
@@ -13,8 +15,11 @@ on:
         description: "Tag del release (ej: v0.10.2)"
         required: true
 
+# id-token + attestations: para npm provenance (OIDC) y actions/attest-build-provenance.
 permissions:
-  contents: write # para crear/actualizar el Release y subir assets
+  contents: write # crear/actualizar el Release y subir assets
+  id-token: write # OIDC para `npm publish --provenance` y la atestación
+  attestations: write # actions/attest-build-provenance
 
 jobs:
   build:
@@ -40,6 +45,10 @@ jobs:
       # standalone). El bundle necesita el build standalone, que corremos aparte.
       - name: Install deps (sin prepare)
         run: npm ci --ignore-scripts --no-audit --no-fund
+
+      # Auditoría de deps (M1). No bloquea el build: deja el registro visible en el log.
+      - name: Audit dependencies (high+)
+        run: npm audit --audit-level=high || true
 
       # Sin FORK_LOCAL ⇒ next.config usa output:'standalone'.
       - name: Build standalone
@@ -69,9 +78,95 @@ jobs:
           tar -czf "quick-outerbase-${{ matrix.target }}.tar.gz" -C .next/standalone .
           ls -lh "quick-outerbase-${{ matrix.target }}.tar.gz"
 
+      # sha256 del bundle (C1). sha256sum viene en el bash de ambos runners (Git Bash en Win).
+      - name: Calcular sha256 del bundle
+        shell: bash
+        run: |
+          sha256sum "quick-outerbase-${{ matrix.target }}.tar.gz" | awk '{print $1}' > "${{ matrix.target }}.sha256"
+          echo "sha256(${{ matrix.target }}) = $(cat ${{ matrix.target }}.sha256)"
+
+      # Atestación de build provenance del .tar.gz (cadena de confianza del asset).
+      - name: Attest build provenance del bundle
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: quick-outerbase-${{ matrix.target }}.tar.gz
+
       - name: Subir asset al Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.tag || github.ref_name }}
           files: quick-outerbase-${{ matrix.target }}.tar.gz
           fail_on_unmatched_files: true
+
+      # Pasamos el sha256 al job de publish vía artifact (uno por target).
+      - name: Subir sha256 como artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: checksum-${{ matrix.target }}
+          path: ${{ matrix.target }}.sha256
+          retention-days: 1
+
+  publish:
+    name: checksums + npm publish (provenance)
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      # Bajamos todos los sha256 (uno por target) a un solo dir.
+      - name: Bajar checksums de los builds
+        uses: actions/download-artifact@v4
+        with:
+          pattern: checksum-*
+          merge-multiple: true
+          path: checksums-in
+
+      # Armamos checksums.json { "<plat>-<arch>": "<sha256>" } y lo embebemos en launcher/.
+      # Este JSON viaja DENTRO del paquete npm firmado → el launcher verifica contra él.
+      - name: Armar checksums.json y embeberlo en launcher/
+        run: |
+          node -e '
+            const fs = require("fs"), path = require("path");
+            const dir = "checksums-in", map = {};
+            for (const f of fs.readdirSync(dir)) {
+              if (!f.endsWith(".sha256")) continue;
+              const target = f.replace(/\.sha256$/, "");
+              map[target] = fs.readFileSync(path.join(dir, f), "utf8").trim().split(/\s+/)[0];
+            }
+            if (Object.keys(map).length === 0) { console.error("No hay checksums!"); process.exit(1); }
+            fs.writeFileSync("launcher/checksums.json", JSON.stringify(map, null, 2) + "\n");
+            console.log("checksums.json embebido en launcher/:");
+            console.log(JSON.stringify(map, null, 2));
+          '
+
+      # Sanidad: el launcher y la app deben coincidir en versión con el tag.
+      - name: Verificar versión del launcher == tag
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          WANT="${TAG#v}"
+          GOT="$(node -p "require('./launcher/package.json').version")"
+          echo "tag=$TAG  launcher=$GOT"
+          if [ "$WANT" != "$GOT" ]; then
+            echo "::error::La versión del launcher ($GOT) no coincide con el tag ($WANT)."
+            exit 1
+          fi
+
+      # checksums.json también como asset del Release (visible/auditable fuera de npm).
+      - name: Subir checksums.json al Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          files: launcher/checksums.json
+          fail_on_unmatched_files: true
+
+      # Publish con provenance (OIDC). checksums.json ya está en launcher/ → viaja en el tarball.
+      - name: Publicar launcher a npm (con provenance)
+        working-directory: launcher
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

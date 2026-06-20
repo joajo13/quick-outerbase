@@ -1,0 +1,27 @@
+# Dependabot: chequea dependencias y workflows semanalmente y abre PRs de update.
+# Defensa en profundidad (M1): mantiene al día las deps del runtime y las actions.
+version: 2
+updates:
+  # Dependencias npm de la app (el bundle precompilado se buildea desde acá).
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+    # Agrupamos los patches/minors para no inundar de PRs.
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # GitHub Actions usadas en los workflows (release-bundles, check).
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "github-actions"

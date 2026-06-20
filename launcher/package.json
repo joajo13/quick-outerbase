@@ -1,7 +1,7 @@
 {
   "name": "quick-outerbase",
-  "version": "0.4.1",
-  "description": "Launcher de quick-outerbase: baja un runtime precompilado y levanta una UI web local para tu DATABASE_URL (postgres/mysql/sqlite/libsql/dynamodb) en segundos. Fork de Outerbase Studio (AGPL-3.0).",
+  "version": "0.5.0",
+  "description": "Database GUI for your terminal: pass a DATABASE_URL and `npx quick-outerbase` opens a local web UI to browse, query and edit Postgres, MySQL, SQLite, libSQL/Turso and DynamoDB. A fast, open-source Prisma Studio / Drizzle Studio / TablePlus / DbGate alternative. Community fork of Outerbase Studio (AGPL-3.0).",
   "license": "AGPL-3.0-only",
   "bin": {
     "quick-outerbase": "launcher.mjs"
@@ -12,6 +12,8 @@
   },
   "files": [
     "launcher.mjs",
+    "checksum.mjs",
+    "checksums.json",
     "AVISO_LICENCIA.md",
     "LICENSE"
   ],
@@ -22,13 +24,34 @@
   "homepage": "https://github.com/joajo13/quick-outerbase#readme",
   "keywords": [
     "database",
+    "database-gui",
+    "database-gui-cli",
+    "database-client",
+    "database-manager",
+    "database-management",
+    "sql-client",
+    "sql-editor",
+    "db-client",
+    "npx-database-manager",
     "studio",
+    "outerbase-studio",
+    "prisma-studio",
+    "prisma-studio-alternative",
+    "drizzle-studio",
+    "drizzle-studio-alternative",
+    "tableplus-alternative",
+    "dbgate-alternative",
+    "erd",
+    "erd-viewer",
     "postgres",
+    "postgresql",
     "mysql",
+    "mariadb",
     "sqlite",
     "libsql",
+    "turso",
     "dynamodb",
-    "prisma-studio",
-    "gui"
+    "gui",
+    "cli"
   ]
 }

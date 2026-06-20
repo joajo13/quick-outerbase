@@ -1,16 +1,21 @@
 # quick-outerbase
 
-Tomá un `DATABASE_URL` y levantá una **UI web local** para tu base
-(PostgreSQL / MySQL / SQLite / libSQL-Turso) con **un comando**, en segundos.
+**Una GUI de base de datos en tu terminal.** Tomá un `DATABASE_URL` y levantá una **UI web
+local** para explorar, consultar y editar tu base con **un comando**, en segundos.
+Alternativa open-source y multi-motor a **Prisma Studio**, **Drizzle Studio**, **DbGate**,
+**TablePlus** y **Outerbase Studio**.
 
 ```bash
 npx quick-outerbase --url "postgresql://user:pass@host:5432/midb?schema=public"
 ```
 
-Es un **launcher fino**: no compila nada en tu máquina. Detecta tu plataforma, baja
-**una sola vez** un runtime precompilado (`standalone`, ~28 MB) desde GitHub Releases,
-lo cachea y arranca. Primer run: segundos. Siguientes: instantáneo.
+**Motores:** PostgreSQL · MySQL/MariaDB · SQLite · libSQL/Turso · **DynamoDB**.
 
+Es un **launcher fino** (cero dependencias): no compila nada en tu máquina. Detecta tu
+plataforma, baja **una sola vez** un runtime precompilado (`standalone`, ~28 MB) desde
+GitHub Releases, lo cachea y arranca. Primer run: segundos. Siguientes: instantáneo.
+
+> ⚠️ **Fork no oficial de la comunidad.** No está afiliado ni respaldado por Outerbase.
 > Fork de [Outerbase Studio](https://github.com/outerbase/studio), bajo **AGPL-3.0**.
 > Código fuente completo: https://github.com/joajo13/quick-outerbase
 
@@ -28,6 +33,10 @@ npx quick-outerbase --url "libsql://mi-db.turso.io?authToken=XXXX"
 
 # SQLite  (el path relativo se resuelve contra tu carpeta actual)
 npx quick-outerbase --url "file:./datos.sqlite"
+
+# DynamoDB  (las creds NO van en la URL: las resuelve el server desde la cadena AWS)
+AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... \
+  npx quick-outerbase --url "dynamodb://us-east-1"
 ```
 
 También podés pasar el URL por la env `DATABASE_URL`. Flags: `--port <n>` (default 3008),

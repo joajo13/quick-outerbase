@@ -21,6 +21,10 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      # Auditoría de deps (M1). No bloquea el check: deja el registro visible en el log.
+      - name: Audit dependencies (high+)
+        run: npm audit --audit-level=high || true
+
       - name: Run Check
         run: npm run staged
 

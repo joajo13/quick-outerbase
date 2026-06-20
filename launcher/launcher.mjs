@@ -19,6 +19,7 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { loadExpected, verifyBundleChecksum } from "./checksum.mjs";
 
 const require = createRequire(import.meta.url);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -85,7 +86,7 @@ if (!scheme || !SUPPORTED.has(scheme)) {
 // DynamoDB: la URL lleva SOLO región (+endpoint opcional). Las credenciales NO van
 // en la URL: las resuelve el server standalone desde la cadena estándar de AWS
 // (env AWS_ACCESS_KEY_ID/SECRET/SESSION_TOKEN, ~/.aws/credentials o IAM role),
-// heredadas vía process.env al spawnear server.js más abajo.
+// que el launcher deja pasar al server vía la whitelist AWS_* (ver buildChildEnv).
 if (scheme === "dynamodb") {
   const hasEnvCreds =
     process.env.AWS_ACCESS_KEY_ID ||
@@ -149,10 +150,30 @@ async function ensureBundle() {
 
   const localOverride = process.env.QUICK_OUTERBASE_BUNDLE;
   if (localOverride) {
+    // Canal de testing/offline: confiás en TU bundle local, se saltea la verificación.
     if (!existsSync(localOverride)) fail(`QUICK_OUTERBASE_BUNDLE no existe: ${localOverride}`);
     copyFileSync(localOverride, innerTgz);
   } else {
     await download(assetUrl, innerTgz);
+    // --- Cadena de confianza (C1): verificar el sha256 del bundle ANTES de extraer.
+    // checksums.json viaja DENTRO del paquete npm firmado; el bundle viene de un
+    // Release sin firmar. Si no matchea, abortamos y borramos el tgz corrupto.
+    let expected;
+    try {
+      expected = loadExpected(path.join(__dirname, "checksums.json"));
+    } catch {
+      rmSync(innerTgz, { force: true });
+      fail(
+        "No encontré checksums.json en el paquete: no puedo verificar la integridad del runtime.\n" +
+          "Reinstalá quick-outerbase desde npm (npm i -g quick-outerbase@latest o npx -y quick-outerbase@latest)."
+      );
+    }
+    try {
+      verifyBundleChecksum(innerTgz, target, expected);
+    } catch (e) {
+      rmSync(innerTgz, { force: true });
+      fail(e.message);
+    }
   }
   extractInDir(bundleDir, "_bundle.tar.gz");
   try {
@@ -190,6 +211,41 @@ function extractInDir(dir, fname) {
   }
 }
 
+// --- Subset whitelisteado de env para el server (A2: defensa en profundidad) ---
+// El runtime corre en otro proceso; no tiene por qué heredar TODO process.env (que
+// puede traer tokens de CI, claves de otros servicios, etc.). Pasamos solo lo que el
+// server standalone, Node/Next y el AWS SDK necesitan. OJO: NO movemos la resolución
+// de credenciales acá; solo dejamos pasar las AWS_* para que el server (proxy) las
+// resuelva server-side como hasta ahora (autoconnect de dynamodb:// intacto).
+function buildChildEnv() {
+  // Match case-insensitive: en Windows las claves vienen con case impredecible.
+  const PREFIXES = ["AWS_", "NODE_", "NEXT_", "NPM_", "UV_"];
+  const EXACT = new Set([
+    // PATH / home / temp — Node y cualquier spawn del runtime los necesitan
+    "PATH", "HOME", "TMPDIR", "TMP", "TEMP", "PWD",
+    // locale / timezone
+    "LANG", "LC_ALL", "LC_CTYPE", "TZ",
+    // Windows: imprescindibles para que Node y las DLLs del sistema resuelvan
+    "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "COMSPEC", "PATHEXT",
+    "APPDATA", "LOCALAPPDATA", "PROGRAMDATA", "ALLUSERSPROFILE",
+    "PROGRAMFILES", "PROGRAMFILES(X86)", "PROGRAMW6432", "COMMONPROGRAMFILES",
+    "USERPROFILE", "USERNAME", "USERDOMAIN", "HOMEDRIVE", "HOMEPATH",
+    "NUMBER_OF_PROCESSORS", "PROCESSOR_ARCHITECTURE", "OS",
+    // red / proxy / TLS — para que el AWS SDK salga a internet (incluido detrás de proxy)
+    "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY",
+    "SSL_CERT_FILE", "SSL_CERT_DIR",
+    // app: lo que el server standalone lee de su propio entorno
+    "DATABASE_AUTH_TOKEN", "BASE_URL",
+  ]);
+  const out = {};
+  for (const [k, v] of Object.entries(process.env)) {
+    if (v === undefined) continue;
+    const up = k.toUpperCase();
+    if (EXACT.has(up) || PREFIXES.some((p) => up.startsWith(p))) out[k] = v;
+  }
+  return out;
+}
+
 // --- Arranque del server standalone + teardown limpio ---
 async function main() {
   await ensureBundle();
@@ -199,7 +255,8 @@ async function main() {
     cwd: bundleDir,
     stdio: "inherit",
     env: {
-      ...process.env,
+      ...buildChildEnv(),
+      // El launcher fija estos explícitamente (pisan cualquier valor heredado):
       DATABASE_URL: runUrl,
       PORT: String(port),
       HOSTNAME: process.env.HOSTNAME || "127.0.0.1",
