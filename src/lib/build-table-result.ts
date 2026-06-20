@@ -308,8 +308,20 @@ function pipeDynamoSparseSchema(
       header.metadata.isPrimaryKey = true;
     }
 
-    // Wave 2: toda la grilla DynamoDB es read-only (sin edición todavía).
-    header.setting.readonly = true;
+    // Wave 3: celdas escalares editables. Una celda es editable si NO es PK/SK
+    // y su tipo DynamoDB es escalar (S, N, BOOL, NULL).
+    // La PK/SK queda read-only porque el grid usa los atributos pk para armar el
+    // WHERE del UPDATE/DELETE; si cambiaran, no podría identificar el item.
+    // Los tipos complejos (M, L, SS, NS, BS, B) quedan read-only: editar JSON
+    // anidado / sets / binario es de otra wave.
+    const dynamoType = header.metadata.dynamoType;
+    const isScalar =
+      dynamoType === "S" ||
+      dynamoType === "N" ||
+      dynamoType === "BOOL" ||
+      dynamoType === "NULL";
+
+    header.setting.readonly = header.metadata.isPrimaryKey === true || !isScalar;
   }
 }
 

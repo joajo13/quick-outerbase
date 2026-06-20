@@ -373,16 +373,48 @@ export class DynamoDriver extends BaseDriver {
     throw new Error("DynamoDB: no implementado todavia (wave posterior)");
   }
 
-  query(_stmt: string): Promise<DatabaseResultSet> {
-    throw new Error("DynamoDB: no implementado todavia (wave posterior)");
+  async query(stmt: string): Promise<DatabaseResultSet> {
+    const trimmed = stmt.trim();
+
+    // ¿Es un statement control-plane JSON ({ __dynamo, params })?
+    if (trimmed.startsWith("{")) {
+      try {
+        const parsed = JSON.parse(trimmed) as {
+          __dynamo?: string;
+          params?: Record<string, unknown>;
+        };
+        if (parsed && parsed.__dynamo) {
+          await this._db.exec(parsed.__dynamo, parsed.params ?? {});
+          return itemsToResultSet([], { keyAttributes: [] });
+        }
+      } catch {
+        // No era JSON válido → lo tratamos como PartiQL más abajo.
+      }
+    }
+
+    // PartiQL
+    const res = (await this._db.exec("ExecuteStatement", {
+      Statement: stmt,
+    })) as { Items?: Record<string, unknown>[] };
+
+    return itemsToResultSet(res.Items ?? [], { keyAttributes: [] });
   }
 
-  batch(_stmts: string[]): Promise<DatabaseResultSet[]> {
-    throw new Error("DynamoDB: no implementado todavia (wave posterior)");
+  async batch(stmts: string[]): Promise<DatabaseResultSet[]> {
+    const results: DatabaseResultSet[] = [];
+    for (const s of stmts) {
+      results.push(await this.query(s));
+    }
+    return results;
   }
 
-  transaction(_stmts: string[]): Promise<DatabaseResultSet[]> {
-    throw new Error("DynamoDB: no implementado todavia (wave posterior)");
+  async transaction(stmts: string[]): Promise<DatabaseResultSet[]> {
+    // Secuencial (NO en paralelo) para preservar el orden.
+    const results: DatabaseResultSet[] = [];
+    for (const s of stmts) {
+      results.push(await this.query(s));
+    }
+    return results;
   }
 
   trigger(
@@ -392,12 +424,26 @@ export class DynamoDriver extends BaseDriver {
     throw new Error("DynamoDB: no implementado todavia (wave posterior)");
   }
 
-  findFirst(
-    _schemaName: string,
-    _tableName: string,
-    _key: Record<string, DatabaseValue>
+  async findFirst(
+    schemaName: string,
+    tableName: string,
+    key: Record<string, DatabaseValue>
   ): Promise<DatabaseResultSet> {
-    throw new Error("DynamoDB: no implementado todavia (wave posterior)");
+    const pk = (await this.tableSchema(schemaName, tableName)).pk;
+
+    // La Key de DynamoDB debe ser EXACTAMENTE el key schema (sin atributos extra)
+    const filteredKey: Record<string, unknown> = {};
+    for (const attr of pk) {
+      if (attr in key) filteredKey[attr] = key[attr];
+    }
+
+    const res = (await this._db.exec("GetItem", {
+      TableName: tableName,
+      Key: filteredKey,
+    })) as { Item?: Record<string, unknown> };
+
+    const item = res.Item;
+    return itemsToResultSet(item ? [item] : [], { keyAttributes: pk });
   }
 
   // -------------------------------------------------------------------------
@@ -459,29 +505,281 @@ export class DynamoDriver extends BaseDriver {
     return { data, schema };
   }
 
-  updateTableData(
-    _schemaName: string,
-    _tableName: string,
-    _ops: DatabaseTableOperation[],
-    _validateSchema?: DatabaseTableSchema
+  async updateTableData(
+    schemaName: string,
+    tableName: string,
+    ops: DatabaseTableOperation[],
+    validateSchema?: DatabaseTableSchema
   ): Promise<DatabaseTableOperationReslt[]> {
-    throw new Error("DynamoDB: no implementado todavia (wave posterior)");
+    const schema =
+      validateSchema ?? (await this.tableSchema(schemaName, tableName));
+    const pk = schema.pk;
+
+    if (!pk || pk.length === 0) {
+      throw new Error(
+        "DynamoDB: tabla sin clave primaria, no se puede editar"
+      );
+    }
+
+    const pkSet = new Set(pk);
+
+    // Tipo DynamoDB por atributo (S/N/B/BOOL/...). La grilla edita SIEMPRE como
+    // string; sin coerción un atributo N terminaría guardado como S y corrompería
+    // el tipo del atributo en la tabla. Coercionamos los N a number antes de mandar.
+    const typeOf: Record<string, string> = {};
+    for (const c of schema.columns) typeOf[c.name] = c.type;
+
+    const coerce = (attr: string, value: DatabaseValue): DatabaseValue => {
+      if (value === null || value === undefined) return value;
+      if (typeOf[attr] === "N" && typeof value === "string") {
+        const trimmed = value.trim();
+        const n = Number(trimmed);
+        if (trimmed === "" || Number.isNaN(n)) {
+          throw new Error(
+            `DynamoDB: "${value}" no es un número válido para la columna "${attr}"`
+          );
+        }
+        return n;
+      }
+      return value;
+    };
+
+    const results: DatabaseTableOperationReslt[] = [];
+
+    for (const op of ops) {
+      if (op.operation === "INSERT") {
+        // La partition/sort key son obligatorias: sin ellas DynamoDB devuelve un
+        // ValidationException críptico. Avisamos claro antes de salir a la red.
+        for (const attr of pk) {
+          if (op.values[attr] === null || op.values[attr] === undefined) {
+            throw new Error(
+              `DynamoDB: falta la clave "${attr}" para insertar el item`
+            );
+          }
+        }
+
+        // El DocumentClient TIRA si un atributo es undefined; lo sacamos (una
+        // celda sin tocar llega como undefined). null sí es válido (tipo NULL).
+        const item: Record<string, DatabaseValue> = {};
+        for (const [attr, value] of Object.entries(op.values)) {
+          if (value === undefined) continue;
+          item[attr] = coerce(attr, value);
+        }
+
+        await this._db.exec("PutItem", { TableName: tableName, Item: item });
+        // Put no devuelve el item: reflejamos los values que mandamos.
+        results.push({ record: item });
+        continue;
+      }
+
+      // UPDATE / DELETE comparten `where`
+      const filteredKey: Record<string, unknown> = {};
+      for (const attr of pk) {
+        if (attr in op.where) filteredKey[attr] = op.where[attr];
+      }
+
+      if (op.operation === "DELETE") {
+        await this._db.exec("DeleteItem", {
+          TableName: tableName,
+          Key: filteredKey,
+        });
+        results.push({});
+        continue;
+      }
+
+      // UPDATE: construir SET con los atributos no-clave de op.values.
+      // Excluimos undefined (el DocumentClient tira) y la pk (no se puede mutar
+      // la Key vía UpdateExpression).
+      const setEntries = Object.entries(op.values).filter(
+        ([attr, value]) => !pkSet.has(attr) && value !== undefined
+      );
+
+      if (setEntries.length === 0) {
+        // No hay nada que setear: devolvemos el item actual vía GetItem.
+        const res = (await this._db.exec("GetItem", {
+          TableName: tableName,
+          Key: filteredKey,
+        })) as { Item?: Record<string, DatabaseValue> };
+        results.push({ record: res.Item });
+        continue;
+      }
+
+      const expressionAttributeNames: Record<string, string> = {};
+      const expressionAttributeValues: Record<string, unknown> = {};
+      const setClauses: string[] = [];
+
+      setEntries.forEach(([attr, value], i) => {
+        const nameKey = `#k${i}`;
+        const valueKey = `:v${i}`;
+        expressionAttributeNames[nameKey] = attr;
+        expressionAttributeValues[valueKey] = coerce(attr, value);
+        setClauses.push(`${nameKey} = ${valueKey}`);
+      });
+
+      const res = (await this._db.exec("UpdateItem", {
+        TableName: tableName,
+        Key: filteredKey,
+        UpdateExpression: `SET ${setClauses.join(", ")}`,
+        ExpressionAttributeNames: expressionAttributeNames,
+        ExpressionAttributeValues: expressionAttributeValues,
+        ReturnValues: "ALL_NEW",
+      })) as { Attributes?: Record<string, DatabaseValue> };
+
+      results.push({ record: res.Attributes });
+    }
+
+    return results;
   }
 
-  dropTable(_schemaName: string, _tableName: string): Promise<void> {
-    throw new Error("DynamoDB: no implementado todavia (wave posterior)");
+  async dropTable(_schemaName: string, tableName: string): Promise<void> {
+    await this._db.exec("DeleteTable", { TableName: tableName });
   }
 
-  emptyTable(_schemaName: string, _tableName: string): Promise<void> {
-    throw new Error("DynamoDB: no implementado todavia (wave posterior)");
+  async emptyTable(schemaName: string, tableName: string): Promise<void> {
+    const pk = (await this.tableSchema(schemaName, tableName)).pk;
+    if (!pk || pk.length === 0) {
+      // Sin pk no podemos armar DeleteRequest; no hay nada que hacer.
+      return;
+    }
+
+    // ProjectionExpression con alias para evitar palabras reservadas.
+    const projectionNames: Record<string, string> = {};
+    const projectionParts: string[] = [];
+    pk.forEach((attr, i) => {
+      const nameKey = `#p${i}`;
+      projectionNames[nameKey] = attr;
+      projectionParts.push(nameKey);
+    });
+
+    // 1. Scan paginado proyectando solo la pk → juntar todas las keys.
+    const keys: Record<string, unknown>[] = [];
+    let lastEvaluatedKey: Record<string, unknown> | undefined;
+
+    do {
+      const params: Record<string, unknown> = {
+        TableName: tableName,
+        ProjectionExpression: projectionParts.join(", "),
+        ExpressionAttributeNames: projectionNames,
+      };
+      if (lastEvaluatedKey) params.ExclusiveStartKey = lastEvaluatedKey;
+
+      const scanResult = (await this._db.exec("Scan", params)) as ScanResult & {
+        LastEvaluatedKey?: Record<string, unknown>;
+      };
+
+      for (const item of scanResult.Items ?? []) {
+        const key: Record<string, unknown> = {};
+        for (const attr of pk) key[attr] = item[attr];
+        keys.push(key);
+      }
+      lastEvaluatedKey = scanResult.LastEvaluatedKey;
+    } while (lastEvaluatedKey);
+
+    if (keys.length === 0) return;
+
+    // 2. Borrar en chunks de 25 (límite de BatchWriteItem). BatchWriteItem puede
+    //    devolver UnprocessedItems (throttling/capacidad) SIN fallar: si los
+    //    ignoráramos, emptyTable reportaría éxito con la tabla a medio vaciar.
+    //    Reintentamos los pendientes con backoff exponencial.
+    for (let i = 0; i < keys.length; i += 25) {
+      const chunk = keys.slice(i, i + 25);
+      let requestItems: Record<string, { DeleteRequest: { Key: unknown } }[]> = {
+        [tableName]: chunk.map((Key) => ({ DeleteRequest: { Key } })),
+      };
+
+      for (let attempt = 0; requestItems[tableName]?.length; attempt++) {
+        const res = (await this._db.exec("BatchWriteItem", {
+          RequestItems: requestItems,
+        })) as {
+          UnprocessedItems?: Record<
+            string,
+            { DeleteRequest: { Key: unknown } }[]
+          >;
+        };
+
+        const pending = res?.UnprocessedItems?.[tableName] ?? [];
+        if (pending.length === 0) break;
+
+        if (attempt >= 8) {
+          throw new Error(
+            `DynamoDB: no se pudieron borrar ${pending.length} items de ${tableName} tras varios reintentos`
+          );
+        }
+
+        requestItems = { [tableName]: pending };
+        await new Promise((r) => setTimeout(r, Math.min(1000, 50 * 2 ** attempt)));
+      }
+    }
   }
 
-  createUpdateTableSchema(_change: DatabaseTableSchemaChange): string[] {
+  createUpdateTableSchema(change: DatabaseTableSchemaChange): string[] {
     // OJO: el SchemaEditorTab llama esto en un useMemo durante el render para
-    // generar el "preview script". Si tiramos acá, el render del tab explota y
-    // React reintenta en loop (freeze sin "Maximum update depth"). Devolvemos un
-    // preview vacío; la generación real de CreateTable/UpdateTable es Wave 4.
-    return [];
+    // generar el "preview script". NUNCA debe tirar — devolvemos un statement
+    // JSON que transaction()/query() saben interpretar (__dynamo control-plane).
+    const newName = change.name?.new?.trim();
+    const oldName = change.name?.old?.trim();
+
+    // Solo soportamos creación de tabla nueva en esta wave.
+    if (!newName || oldName) {
+      // rename / alter columns / GSI: DynamoDB no permite alterar key schema.
+      return [];
+    }
+
+    // Columnas marcadas como pk (en orden): primera = HASH, segunda = RANGE.
+    // Guard de la REGLA DE ORO: este método corre en render (useMemo); si
+    // change.columns llega undefined (change a medio formar), .map tiraría y
+    // crashearía el SchemaEditorTab. Nunca debe tirar.
+    const pkColumns = (change.columns ?? [])
+      .map((c) => c.new)
+      .filter((col): col is DatabaseTableColumn => !!col && col.pk === true);
+
+    if (pkColumns.length === 0) {
+      // Sin partition key no se puede crear la tabla.
+      return [];
+    }
+
+    const dynamoAttrType = (type: string | undefined): "S" | "N" | "B" => {
+      const t = (type ?? "").toLowerCase();
+      if (
+        t.includes("int") ||
+        t.includes("num") ||
+        t.includes("real") ||
+        t.includes("float") ||
+        t.includes("double") ||
+        t.includes("decimal")
+      ) {
+        return "N";
+      }
+      if (t.includes("binary") || t.includes("blob")) return "B";
+      return "S";
+    };
+
+    const hash = pkColumns[0];
+    const range = pkColumns[1];
+
+    const keySchema: DynamoKeySchemaElement[] = [
+      { AttributeName: hash.name, KeyType: "HASH" },
+    ];
+    const attributeDefinitions: DynamoAttributeDefinition[] = [
+      { AttributeName: hash.name, AttributeType: dynamoAttrType(hash.type) },
+    ];
+
+    if (range) {
+      keySchema.push({ AttributeName: range.name, KeyType: "RANGE" });
+      attributeDefinitions.push({
+        AttributeName: range.name,
+        AttributeType: dynamoAttrType(range.type),
+      });
+    }
+
+    const params = {
+      TableName: newName,
+      KeySchema: keySchema,
+      AttributeDefinitions: attributeDefinitions,
+      BillingMode: "PAY_PER_REQUEST",
+    };
+
+    return [JSON.stringify({ __dynamo: "CreateTable", params })];
   }
 
   createUpdateDatabaseSchema(_change: DatabaseSchemaChange): string[] {
