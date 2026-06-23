@@ -79,7 +79,7 @@ export function parseDatabaseUrl(raw: string): ParsedDatabaseUrl {
 
   if (!engine) {
     const supported =
-      "postgres://, postgresql://, mysql://, sqlite:/file:, libsql://, dynamodb://<region>";
+      "postgres://, postgresql://, mysql://, sqlite:/file:, libsql://";
     throw new DatabaseUrlError(
       `Scheme no soportado: "${scheme}://". Motores soportados: ${supported}.`
     );

@@ -30,7 +30,8 @@ export interface EnvDriverOptions {
 export function createEnvDriver(
   dialect: SupportedDialect,
   schema?: string,
-  options?: EnvDriverOptions
+  // DEPRECATED: dynamodb — `options` (region/endpoint) solo lo usaba DynamoDB.
+  _options?: EnvDriverOptions
 ): BaseDriver {
   // DEPRECATED: dynamodb — soporte DynamoDB removido del build del CLI npx.
   // Antes acá se instanciaba DynamoDriver contra /proxy/dynamodb. Reversible:
