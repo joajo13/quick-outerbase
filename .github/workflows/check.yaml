@@ -18,12 +18,16 @@ jobs:
         with:
           node-version: 20
 
+      # npm ci (no `npm install`): instala el árbol EXACTO del lockfile, así el
+      # gate de auditoría ve el mismo árbol que el release (determinismo M1).
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
-      # Auditoría de deps (M1). No bloquea el check: deja el registro visible en el log.
-      - name: Audit dependencies (high+)
-        run: npm audit --audit-level=high || true
+      # Auditoría de deps (M1). Gate DURO enforced: bloquea CVE high+ NUEVOS en deps de
+      # producción. El backlog conocido vive en .audit-allowlist.json con motivo + fecha;
+      # el gate falla ante cualquier high+ fuera de esa lista. Ver scripts/audit-gate.mjs.
+      - name: Audit dependencies (gate high+, prod)
+        run: npm run audit:gate
 
       - name: Run Check
         run: npm run staged

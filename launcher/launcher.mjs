@@ -20,6 +20,7 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { loadExpected, verifyBundleChecksum } from "./checksum.mjs";
+import { extractTarGz } from "./extract.mjs";
 
 const require = createRequire(import.meta.url);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -144,8 +145,6 @@ const serverJs = path.join(bundleDir, "server.js");
 async function ensureBundle() {
   if (existsSync(serverJs)) return; // ya cacheado
   mkdirSync(bundleDir, { recursive: true });
-  // El .tgz va ADENTRO del dir destino y extraemos con cwd + basename: así
-  // tar nunca recibe una ruta con ':' (GNU tar la tomaría como host remoto).
   const innerTgz = path.join(bundleDir, "_bundle.tar.gz");
 
   const localOverride = process.env.QUICK_OUTERBASE_BUNDLE;
@@ -175,7 +174,18 @@ async function ensureBundle() {
       fail(e.message);
     }
   }
-  extractInDir(bundleDir, "_bundle.tar.gz");
+  // Extracción in-process (gunzip + parser ustar propio): sin depender del
+  // binario `tar` del PATH. Rechaza path traversal y links que escapen del dir.
+  try {
+    extractTarGz(innerTgz, bundleDir);
+  } catch (e) {
+    // Borramos TODO el bundleDir, no solo el tgz: una extracción a medias deja
+    // server.js escrito (va al principio del tar) y el próximo run cortocircuitaría
+    // en existsSync(serverJs) sobre un árbol incompleto → server roto que no se
+    // autocura. rmSync recursivo también se lleva el innerTgz.
+    rmSync(bundleDir, { recursive: true, force: true });
+    fail("Falló la extracción del bundle: " + (e?.message || e));
+  }
   try {
     rmSync(innerTgz, { force: true });
   } catch {
@@ -197,18 +207,6 @@ async function download(fromUrl, toFile) {
     );
   }
   await pipeline(Readable.fromWeb(res.body), createWriteStream(toFile));
-}
-
-function extractInDir(dir, fname) {
-  // tar disponible en Windows 10+ (tar.exe/bsdtar), macOS y Linux. Corremos con
-  // cwd=dir y solo el basename → sin rutas con ':' que rompan GNU tar.
-  const r = spawnSync("tar", ["-xzf", fname], { cwd: dir, stdio: "inherit" });
-  if (r.error || r.status !== 0) {
-    fail(
-      "Falló la extracción con `tar`. Asegurate de tener `tar` en el PATH " +
-        "(Windows 10+ lo trae como tar.exe)."
-    );
-  }
 }
 
 // --- Subset whitelisteado de env para el server (A2: defensa en profundidad) ---
