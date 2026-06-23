@@ -192,16 +192,27 @@ La vía rápida tiene dos piezas:
 > necesita las `devDependencies` y eso rompería un install desde el registry). El launcher la
 > reemplaza como paquete npm. El flujo `npx github:` sigue andando para correr desde el código.
 
-Para cortar una versión `X.Y.Z` (deben coincidir el tag, `launcher/package.json` y la app):
+El publish **lo hace el CI, no a mano**: el workflow [`release-bundles.yml`](./.github/workflows/release-bundles.yml)
+buildea los bundles por plataforma, los sube como assets del Release **con provenance** (npm
+provenance + GitHub artifact attestations) y publica el launcher a npm con `npm publish --provenance`
+vía OIDC (`id-token: write`, sin tokens de larga vida en tu máquina). Por eso cortar una versión es
+solo un push de tag:
 
 ```bash
-# 1) bump de versión en ambos package.json a X.Y.Z (app raíz + launcher/)
-# 2) commit + tag + push del tag → dispara el CI que buildea los bundles por plataforma
+# 1) bump de versión en ambos package.json a X.Y.Z (app raíz + launcher/).
+#    El CI verifica que launcher/package.json coincida con el tag y aborta el publish si no.
+# 2) commit + push del bump
+git commit -am "release vX.Y.Z" && git push
+# 3) tag + push del tag → dispara el CI, que:
+#      - buildea quick-outerbase-<plat>-<arch>.tar.gz y crea el Release vX.Y.Z (con attestations)
+#      - publica el launcher a npm con provenance
 git tag vX.Y.Z && git push origin vX.Y.Z
-#    (el workflow crea el Release vX.Y.Z y sube quick-outerbase-<plat>-<arch>.tar.gz)
-# 3) publicar el launcher a npm (necesita cuenta en npmjs.com + npm login)
-cd launcher && npm publish --access public
 ```
+
+> **No publiques el launcher a mano** (`npm publish` desde `launcher/`): salteás la provenance y las
+> attestations, que son justo la garantía de que el paquete en npm salió de este repo vía CI. El
+> único camino soportado es el push del tag. El publish necesita el secret `NPM_TOKEN` configurado
+> en el repo (lo usa el CI, no vos).
 
 Después, `npx quick-outerbase@X.Y.Z --url "..."` baja el bundle del Release vX.Y.Z. El launcher
 no incluye ningún `.env`, credencial ni base; el `DATABASE_URL` siempre lo provee el usuario.

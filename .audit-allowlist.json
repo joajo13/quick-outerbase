@@ -1,0 +1,35 @@
+{
+  "$comment": [
+    "Baseline del gate de auditoría M1 (enforced vía scripts/audit-gate.mjs, alias `npm run audit:gate`).",
+    "El gate corre `npm audit --omit=dev --audit-level=high` y BLOQUEA cualquier CVE high+ NUEVO en deps de",
+    "PRODUCCIÓN (lo que viaja en el bundle standalone). Las advisories de acá son el backlog CONOCIDO al",
+    "2026-06-22: aceptadas temporalmente para no frenar releases mientras se saldan. Cada upgrade que cierre",
+    "una debe ELIMINAR su entrada (el gate avisa cuáles quedaron obsoletas). Burn-down pendiente: subir Next a",
+    "una versión sin estos CVEs (upgrade mayor, breaking), reemplazar/quitar xlsx (sin fix), y `npm audit fix`",
+    "de las no-breaking (form-data, lodash, ws, flatted, minimatch, picomatch)."
+  ],
+  "created": "2026-06-22",
+  "allow": [
+    { "id": "GHSA-h25m-26qc-wcjf", "pkg": "next", "severity": "high", "fix": "upgrade-mayor (breaking)", "note": "DoS deserialización RSC. Studio corre en localhost single-user: superficie de ataque remoto baja." },
+    { "id": "GHSA-q4gf-8mx6-v5v3", "pkg": "next", "severity": "high", "fix": "upgrade-mayor (breaking)", "note": "DoS Server Components." },
+    { "id": "GHSA-8h8q-6873-q5fj", "pkg": "next", "severity": "high", "fix": "upgrade-mayor (breaking)", "note": "DoS Server Components." },
+    { "id": "GHSA-26hh-7cqf-hhc6", "pkg": "next", "severity": "high", "fix": "upgrade-mayor (breaking)", "note": "Middleware/proxy bypass (segment-prefetch)." },
+    { "id": "GHSA-mg66-mrh9-m8jx", "pkg": "next", "severity": "high", "fix": "upgrade-mayor (breaking)", "note": "DoS por agotamiento de conexiones (Cache Components)." },
+    { "id": "GHSA-c4j6-fc7j-m34r", "pkg": "next", "severity": "high", "fix": "upgrade-mayor (breaking)", "note": "SSRF vía WebSocket upgrades." },
+    { "id": "GHSA-492v-c6pp-mqqv", "pkg": "next", "severity": "high", "fix": "upgrade-mayor (breaking)", "note": "Middleware/proxy bypass (route params)." },
+    { "id": "GHSA-267c-6grr-h53f", "pkg": "next", "severity": "high", "fix": "upgrade-mayor (breaking)", "note": "Middleware/proxy bypass (segment-prefetch)." },
+    { "id": "GHSA-36qx-fr4f-26g5", "pkg": "next", "severity": "high", "fix": "upgrade-mayor (breaking)", "note": "Middleware/proxy bypass (Pages Router i18n)." },
+    { "id": "GHSA-fjxv-7rqg-78g4", "pkg": "form-data", "severity": "critical", "fix": "npm audit fix (no-breaking)", "note": "Random inseguro para boundary. Transitiva. Saldar en el burn-down." },
+    { "id": "GHSA-hmw2-7cc7-3qxx", "pkg": "form-data", "severity": "high", "fix": "npm audit fix (no-breaking)", "note": "CRLF injection. Transitiva. Saldar en el burn-down." },
+    { "id": "GHSA-r5fr-rjxr-66jc", "pkg": "lodash / lodash-es", "severity": "high", "fix": "npm audit fix (no-breaking)", "note": "Code injection vía _.template. Saldar en el burn-down." },
+    { "id": "GHSA-3ppc-4f35-3m26", "pkg": "minimatch", "severity": "high", "fix": "npm audit fix", "note": "ReDoS. Transitiva. Saldar en el burn-down." },
+    { "id": "GHSA-7r86-cg39-jmmj", "pkg": "minimatch", "severity": "high", "fix": "npm audit fix", "note": "ReDoS matchOne(). Transitiva." },
+    { "id": "GHSA-23c5-xmqv-rm74", "pkg": "minimatch", "severity": "high", "fix": "npm audit fix", "note": "ReDoS extglobs anidados. Transitiva." },
+    { "id": "GHSA-c2c7-rcm5-vvqj", "pkg": "picomatch", "severity": "high", "fix": "npm audit fix", "note": "ReDoS extglob quantifiers. Transitiva." },
+    { "id": "GHSA-96hv-2xvq-fx4p", "pkg": "ws", "severity": "high", "fix": "npm audit fix (no-breaking)", "note": "Memory exhaustion DoS. Transitiva (miniflare/dev)." },
+    { "id": "GHSA-25h7-pfq9-p65f", "pkg": "flatted", "severity": "high", "fix": "npm audit fix (no-breaking)", "note": "DoS recursión en parse(). Transitiva." },
+    { "id": "GHSA-rf6f-7fwh-wjgh", "pkg": "flatted", "severity": "high", "fix": "npm audit fix (no-breaking)", "note": "Prototype pollution vía parse(). Transitiva." },
+    { "id": "GHSA-4r6h-8v6p-xvw6", "pkg": "xlsx", "severity": "high", "fix": "SIN FIX", "note": "Prototype pollution SheetJS. No hay fix en npm: evaluar reemplazo o dejar de exponer import/export xlsx." },
+    { "id": "GHSA-5pgg-2g8v-p4x9", "pkg": "xlsx", "severity": "high", "fix": "SIN FIX", "note": "ReDoS SheetJS. No hay fix en npm: evaluar reemplazo." }
+  ]
+}

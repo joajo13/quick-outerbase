@@ -46,9 +46,12 @@ jobs:
       - name: Install deps (sin prepare)
         run: npm ci --ignore-scripts --no-audit --no-fund
 
-      # Auditoría de deps (M1). No bloquea el build: deja el registro visible en el log.
-      - name: Audit dependencies (high+)
-        run: npm audit --audit-level=high || true
+      # Auditoría de deps (M1). Gate DURO enforced: bloquea CVE high+ NUEVOS en deps de
+      # producción (lo que viaja en el bundle). El backlog conocido vive en
+      # .audit-allowlist.json con motivo + fecha; el gate falla ante cualquier high+
+      # fuera de esa lista. Ver scripts/audit-gate.mjs.
+      - name: Audit dependencies (gate high+, prod)
+        run: npm run audit:gate
 
       # Sin FORK_LOCAL ⇒ next.config usa output:'standalone'.
       - name: Build standalone

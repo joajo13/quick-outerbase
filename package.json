@@ -42,6 +42,7 @@
     "prepare": "node bin/prepare-build.mjs",
     "tsc": "tsc --noEmit --skipLibCheck",
     "test": "jest",
+    "audit:gate": "node scripts/audit-gate.mjs",
     "staged": "npm run typecheck && npm run lint && jest",
     "typecheck": "tsc --noEmit --skipLibCheck",
     "format": "prettier --check .",

@@ -13,6 +13,7 @@
   "files": [
     "launcher.mjs",
     "checksum.mjs",
+    "extract.mjs",
     "checksums.json",
     "AVISO_LICENCIA.md",
     "LICENSE"
@@ -27,6 +28,7 @@
     "database-gui",
     "database-gui-cli",
     "database-client",
+    "database-client-terminal",
     "database-manager",
     "database-management",
     "sql-client",
