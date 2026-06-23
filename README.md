@@ -222,6 +222,11 @@ Probá el launcher localmente (sin release real) contra un bundle armado a mano:
 ```bash
 NEXT_TELEMETRY_DISABLED=1 npx next build          # genera .next/standalone
 cp -r .next/static .next/standalone/.next/static && cp -r public .next/standalone/public
+# El tracer de Next (nft) NO sigue el require dinámico `require(`@libsql/${plat}`)`,
+# así que el binario nativo queda fuera del standalone. Lo copiamos a mano (igual que
+# el CI en release-bundles.yml), sino SQLite/libsql rompe con "Cannot find module".
+mkdir -p .next/standalone/node_modules/@libsql && cp -r node_modules/@libsql/. .next/standalone/node_modules/@libsql/
+[ -d node_modules/libsql ] && { mkdir -p .next/standalone/node_modules/libsql && cp -r node_modules/libsql/. .next/standalone/node_modules/libsql/; }
 tar -czf /tmp/sa.tgz -C .next/standalone .
 bash launcher/verify-launcher.sh /tmp/sa.tgz       # E2E: arranque + datos + teardown
 ```
