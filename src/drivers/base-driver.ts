@@ -26,6 +26,10 @@ export function describeTableColumnType(type: ColumnType) {
   }
 }
 
+// DEPRECATED: dynamodb — el valor "dynamodb" se mantiene en la unión a propósito para
+// no cascadear errores de tipo en ramas `=== "dynamodb"` (ahora código muerto). El flujo
+// /env ya NO puede producirlo: database-url.ts lo sacó del SCHEME_MAP y env-driver tira.
+// Reversible: ver _deprecated/README.md.
 export type SupportedDialect = "sqlite" | "mysql" | "postgres" | "dolt" | "dynamodb";
 export type SqlOrder = "ASC" | "DESC";
 export type DatabaseRow = Record<string, unknown>;

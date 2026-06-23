@@ -25,7 +25,7 @@ import {
 import { createVariableHighlightPlugin } from "@/components/editor/sql-editor/variable-highlight-plugin";
 import AgentDriverList from "@/drivers/agent/list";
 import { SupportedDialect } from "@/drivers/base-driver";
-import { partiqlDialect } from "@/drivers/dynamodb/partiql-dialect";
+// DEPRECATED: dynamodb — import { partiqlDialect } removido del build (ver _deprecated/README.md).
 import sqliteFunctionList from "@/drivers/sqlite/function-tooltip.json";
 import { sqliteDialect } from "@/drivers/sqlite/sqlite-dialect";
 import { KEY_BINDING } from "@/lib/key-matcher";
@@ -181,13 +181,7 @@ const SqlEditor = forwardRef<ReactCodeMirrorRef, SqlEditorProps>(
           dialect: PostgresDialect,
           schema,
         });
-      } else if (dialect === "dynamodb") {
-        // PartiQL no tiene function-tooltips específicos de SQL; solo el dialecto.
-        // Schema también se pasa para que el autocompletado de nombres de tabla funcione cuando esté disponible.
-        sqlDialect = sql({
-          dialect: partiqlDialect,
-          schema,
-        });
+        // DEPRECATED: dynamodb — acá iba la rama PartiQL (partiqlDialect), removida del build.
       } else {
         sqlDialect = sql({
           dialect: MySQLDialect,

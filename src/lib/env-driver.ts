@@ -1,7 +1,8 @@
 import { BaseDriver, SupportedDialect } from "@/drivers/base-driver";
 import { NodeProxyQueryable } from "@/drivers/database/node-proxy";
-import { DynamoQueryable } from "@/drivers/database/dynamodb-queryable";
-import { DynamoDriver } from "@/drivers/dynamodb/dynamodb-driver";
+// DEPRECATED: dynamodb — drivers de DynamoDB sacados del build (ver _deprecated/README.md).
+// import { DynamoQueryable } from "@/drivers/database/dynamodb-queryable";
+// import { DynamoDriver } from "@/drivers/dynamodb/dynamodb-driver";
 import PostgresLikeDriver from "@/drivers/postgres/postgres-driver";
 import MySQLLikeDriver from "@/drivers/mysql/mysql-driver";
 import { SqliteLikeBaseDriver } from "@/drivers/sqlite-base-driver";
@@ -31,13 +32,13 @@ export function createEnvDriver(
   schema?: string,
   options?: EnvDriverOptions
 ): BaseDriver {
+  // DEPRECATED: dynamodb — soporte DynamoDB removido del build del CLI npx.
+  // Antes acá se instanciaba DynamoDriver contra /proxy/dynamodb. Reversible:
+  // ver _deprecated/README.md. database-url.ts ya no produce dialect "dynamodb",
+  // así que este guard nunca se alcanza por el flujo normal.
   if (dialect === "dynamodb") {
-    return new DynamoDriver(
-      new DynamoQueryable("/proxy/dynamodb", {
-        region: options?.region ?? "us-east-1",
-        endpoint: options?.endpoint,
-        // sin accessKeyId/secretAccessKey: las pone el server.
-      })
+    throw new Error(
+      "DynamoDB fue deprecado en esta build del CLI. Ver _deprecated/README.md para reactivarlo."
     );
   }
 
