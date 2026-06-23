@@ -13,6 +13,8 @@ const config: Config = {
     window: {},
   },
   testEnvironment: "node",
+  // _deprecated/ = maquinaria cloud upstream fuera del build del CLI npx.
+  testPathIgnorePatterns: ["<rootDir>/node_modules/", "<rootDir>/_deprecated/"],
   // Add more setup options before each test is run
   setupFilesAfterEnv: ["<rootDir>/jest.setup.ts"],
 };

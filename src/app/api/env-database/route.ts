@@ -25,8 +25,8 @@ export async function GET() {
       dialect: parsed.dialect,
       name: parsed.displayName,
       schema: parsed.schema,
-      // Solo dynamodb: región/endpoint (NO secretos) para que el cliente arme el
-      // driver. undefined en el resto → JSON.stringify los omite.
+      // DEPRECATED: dynamodb — region/endpoint quedaban para DynamoDB (removido del
+      // build). Hoy siempre undefined → JSON.stringify los omite. Ver _deprecated/README.md.
       region: parsed.region,
       endpoint: parsed.endpoint,
     });

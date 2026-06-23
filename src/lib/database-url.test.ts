@@ -40,54 +40,15 @@ describe("parseDatabaseUrl — inferencia de motor por scheme", () => {
     expect(r.authToken).toBe("secret123");
   });
 
-  test("dynamodb://us-east-1 → dialecto dynamodb, región, sin endpoint", () => {
-    const r = parseDatabaseUrl("dynamodb://us-east-1");
-    expect(r.engine).toBe("dynamodb");
-    expect(r.dialect).toBe("dynamodb");
-    expect(r.region).toBe("us-east-1");
-    expect(r.endpoint).toBeUndefined();
-    expect(r.displayName).toBe("DynamoDB (us-east-1)");
-  });
-
-  test("dynamodb con ?endpoint= (DynamoDB Local) lo extrae", () => {
-    const r = parseDatabaseUrl(
-      "dynamodb://us-east-1?endpoint=http://localhost:8000"
+  // DEPRECATED: dynamodb — el scheme dynamodb:// fue removido del build del CLI npx
+  // (ver _deprecated/README.md). Ahora se trata como scheme no soportado.
+  test("dynamodb:// → scheme no soportado (deprecado)", () => {
+    expect(() => parseDatabaseUrl("dynamodb://us-east-1")).toThrow(
+      DatabaseUrlError
     );
-    expect(r.region).toBe("us-east-1");
-    expect(r.endpoint).toBe("http://localhost:8000");
-  });
-
-  test("dynamodb sin región → error claro", () => {
-    expect(() => parseDatabaseUrl("dynamodb://")).toThrow(DatabaseUrlError);
-    expect(() => parseDatabaseUrl("dynamodb://")).toThrow(/región/i);
-  });
-
-  test("dynamodb NUNCA acepta credenciales en userinfo (user:pass@)", () => {
-    expect(() =>
-      parseDatabaseUrl("dynamodb://AKIA123:secret@us-east-1")
-    ).toThrow(DatabaseUrlError);
-    expect(() =>
-      parseDatabaseUrl("dynamodb://AKIA123:secret@us-east-1")
-    ).toThrow(/credenciales/i);
-  });
-
-  test("dynamodb NUNCA acepta credenciales en query params", () => {
-    expect(() =>
-      parseDatabaseUrl(
-        "dynamodb://us-east-1?accessKeyId=AKIA123&secretAccessKey=shh"
-      )
-    ).toThrow(DatabaseUrlError);
-    expect(() =>
-      parseDatabaseUrl("dynamodb://us-east-1?aws_secret_access_key=shh")
-    ).toThrow(/credenciales/i);
-  });
-
-  test("dynamodb: connectionString y displayName no contienen secretos", () => {
-    const r = parseDatabaseUrl(
-      "dynamodb://us-east-1?endpoint=http://localhost:8000"
+    expect(() => parseDatabaseUrl("dynamodb://us-east-1")).toThrow(
+      /no soportado/i
     );
-    expect(r.connectionString).not.toMatch(/secret|accessKey/i);
-    expect(r.displayName).not.toMatch(/secret|accessKey/i);
   });
 
   test("scheme no reconocido → error claro", () => {

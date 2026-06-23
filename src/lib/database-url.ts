@@ -38,7 +38,9 @@ const SCHEME_MAP: Record<string, EngineKind> = {
   sqlite: "sqlite",
   file: "sqlite",
   libsql: "libsql",
-  dynamodb: "dynamodb",
+  // DEPRECATED: dynamodb — scheme removido del build del CLI npx. El parser ya no
+  // produce engine "dynamodb" (parseDynamodb queda como código muerto reversible).
+  // Ver _deprecated/README.md.
 };
 
 export class DatabaseUrlError extends Error {}
@@ -77,7 +79,7 @@ export function parseDatabaseUrl(raw: string): ParsedDatabaseUrl {
 
   if (!engine) {
     const supported =
-      "postgres://, postgresql://, mysql://, sqlite:/file:, libsql://, dynamodb://<region>";
+      "postgres://, postgresql://, mysql://, sqlite:/file:, libsql://";
     throw new DatabaseUrlError(
       `Scheme no soportado: "${scheme}://". Motores soportados: ${supported}.`
     );
