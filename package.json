@@ -48,9 +48,7 @@
     "format": "prettier --check .",
     "lint": "next lint",
     "dialect": "node build-dialect.js",
-    "studio": "node bin/fork-studio.mjs",
-    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
-    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy"
+    "studio": "node bin/fork-studio.mjs"
   },
   "bin": {
     "quick-outerbase": "bin/fork-studio.mjs",
@@ -154,7 +152,6 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
-    "@opennextjs/cloudflare": "^0.6.6",
     "@tailwindcss/postcss": "^4.0.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.2.0",
@@ -185,7 +182,6 @@
     "tailwindcss": "^4.0.0",
     "ts-node": "^10.9.2",
     "tsx": "^4.7.1",
-    "typescript": "^5",
-    "wrangler": "^4.6.0"
+    "typescript": "^5"
   }
 }
