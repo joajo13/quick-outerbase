@@ -1,10 +1,11 @@
-import { CloudflareIcon } from "@/components/icons/outerbase-icon";
 import { ReactElement } from "react";
 import { BaseDriver } from "../base-driver";
 import { AgentBaseDriver, AgentPromptOption } from "./base";
 import { AnthropicDriver } from "./anthropic";
 import { ChatGPTDriver } from "./chatgpt";
-import CloudflareAgentDriver from "./cloudflare";
+// DEPRECATED: cloudflare — agent free-tier de Cloudflare Workers AI sacado del build.
+// El assistant queda como BYO (Anthropic/OpenAI/Gemini). Ver _deprecated/README.md.
+// import CloudflareAgentDriver from "./cloudflare";
 import { GeminiDriver } from "./gemini";
 
 interface AgentDriverListItem {
@@ -61,16 +62,9 @@ export default class AgentDriverList {
   constructor(databaseDriver: BaseDriver, config?: AgentConfig) {
     this.config = config;
 
-    this.dict = {
-      "llama-3.3-70b": new CloudflareAgentDriver(
-        databaseDriver,
-        "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
-      ),
-      "sqlcoder-7b-2": new CloudflareAgentDriver(
-        databaseDriver,
-        "@cf/defog/sqlcoder-7b-2"
-      ),
-    };
+    // DEPRECATED: cloudflare — antes acá se registraban los modelos free-tier de
+    // Cloudflare Workers AI (llama-3.3-70b / sqlcoder-7b-2). Removidos del build.
+    this.dict = {};
 
     // Driver del proveedor configurado (BYO key), registrado bajo el model name.
     if (config?.token) {
@@ -97,30 +91,8 @@ export default class AgentDriverList {
   }
 
   list(): AgentDriverListGroup[] {
-    const groups: AgentDriverListGroup[] = [
-      {
-        name: "cloudflare",
-        title: (
-          <div className="flex items-center gap-1">
-            Powered by{" "}
-            <CloudflareIcon className="inline-flex h-4 w-4 text-orange-500" />
-            Cloudflare Workers AI
-          </div>
-        ),
-        agents: [
-          {
-            name: "llama-3.3-70b",
-            free: true,
-            available: !!this.dict["llama-3.3-70b"],
-          },
-          {
-            name: "sqlcoder-7b-2",
-            free: true,
-            available: !!this.dict["sqlcoder-7b-2"],
-          },
-        ],
-      },
-    ];
+    // DEPRECATED: cloudflare — removido el grupo free-tier de Cloudflare Workers AI.
+    const groups: AgentDriverListGroup[] = [];
 
     if (this.config?.token) {
       groups.push({
