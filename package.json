@@ -2,7 +2,7 @@
   "name": "quick-outerbase",
   "version": "0.6.1",
   "private": true,
-  "description": "Database GUI in your terminal: pass a DATABASE_URL and `npx quick-outerbase` opens a local web UI to browse, query and edit Postgres, MySQL, SQLite, libSQL/Turso and DynamoDB. Open-source Prisma Studio / Drizzle Studio / TablePlus / DbGate alternative. Unofficial community fork of Outerbase Studio (AGPL-3.0).",
+  "description": "Database GUI in your terminal: pass a DATABASE_URL and `npx quick-outerbase` opens a local web UI to browse, query and edit Postgres, MySQL, SQLite and libSQL/Turso. Open-source Prisma Studio / Drizzle Studio / TablePlus / DbGate alternative. Unofficial community fork of Outerbase Studio (AGPL-3.0).",
   "license": "AGPL-3.0-only",
   "keywords": [
     "database",
@@ -19,8 +19,7 @@
     "mysql",
     "sqlite",
     "libsql",
-    "turso",
-    "dynamodb"
+    "turso"
   ],
   "repository": {
     "type": "git",
