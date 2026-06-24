@@ -123,7 +123,7 @@ jobs:
 
       # Bajamos todos los sha256 (uno por target) a un solo dir.
       - name: Bajar checksums de los builds
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: checksum-*
           merge-multiple: true
