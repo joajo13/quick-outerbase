@@ -41,11 +41,25 @@ async function buildExecutor(url: string): Promise<Executor> {
   if (parsed.engine === "postgres") {
     const pg = await import("pg");
     setPgParser(pg.types);
+    // search_path estilo Prisma ?schema=: solo lo seteamos cuando vino un schema
+    // no vacío. Sin ?schema (undefined/"") dejamos el search_path default de
+    // Postgres — nunca emitimos `-c search_path=` vacío.
+    const pgSchema = parsed.schema?.trim();
+    // Solo seteamos `-c search_path=` si el schema es un identificador simple y
+    // seguro. Interpolar un valor con espacios/tokens en las libpq `options`
+    // rompe la conexión (Postgres las parsea space-delimited) o inyectaría GUCs
+    // extra. Si no matchea, lo omitimos: la introspección lista todos los schemas
+    // igual y selectTable califica el schema explícitamente, así que no se pierde
+    // funcionalidad. (parsed.schema viene del DATABASE_URL server-side, no del
+    // request; esto es defensa en profundidad para schemas con nombres raros.)
+    const safeSchema =
+      pgSchema && /^[A-Za-z_][A-Za-z0-9_$]*$/.test(pgSchema)
+        ? pgSchema
+        : undefined;
     const pool = new pg.Pool({
       connectionString: parsed.connectionString,
       max: 5,
-      // search_path estilo Prisma ?schema=: aplica a todas las conexiones del pool.
-      options: parsed.schema ? `-c search_path=${parsed.schema}` : undefined,
+      options: safeSchema ? `-c search_path=${safeSchema}` : undefined,
     });
     return {
       async exec(stmts) {

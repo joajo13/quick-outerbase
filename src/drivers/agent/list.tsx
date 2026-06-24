@@ -90,6 +90,14 @@ export default class AgentDriverList {
     return this.defaultModelName || DEFAULT_FREE_TIER_MODEL;
   }
 
+  // ¿Hay al menos un modelo USABLE? dict solo se puebla cuando hay un provider
+  // BYO con token configurado, así que esto equivale a "el usuario ya configuró
+  // provider/model/token". Lo usa el chat tab para decidir si mostrar el CTA de
+  // settings en vez de dejar mandar mensajes que fallarían con "model not available".
+  hasUsableModel(): boolean {
+    return Object.values(this.dict).some((d) => d !== undefined);
+  }
+
   list(): AgentDriverListGroup[] {
     // DEPRECATED: cloudflare — removido el grupo free-tier de Cloudflare Workers AI.
     const groups: AgentDriverListGroup[] = [];
@@ -113,18 +121,50 @@ export default class AgentDriverList {
     return groups;
   }
 
+  // Resuelve el driver para un modelName: primero la key pedida, luego el default
+  // (que puede quedar STALE en localStorage["default-agent-model"], p.ej. un
+  // free-tier removido como "llama-3.3-70b"), y por último CUALQUIER driver
+  // configurado. Así, si hay una key BYO válida (hasUsableModel() === true), TANTO
+  // run() (Ctrl+B) COMO chat() siempre resuelven y no fallan con "model not
+  // available" por un default viejo. Aditivo: solo cambia el caso que antes tiraba
+  // teniendo un driver configurado; si dict está vacío, sigue devolviendo undefined.
+  protected resolveDriver(modelName: string): AgentBaseDriver | undefined {
+    return (
+      this.dict[modelName] ??
+      this.dict[this.getDefaultModelName()] ??
+      Object.values(this.dict).find((d) => d !== undefined)
+    );
+  }
+
   async run(
     modelName: string,
     message: string,
     sessionId: string | undefined,
     options: AgentPromptOption
   ): Promise<string> {
-    const driver = this.dict[modelName] ?? this.dict[this.getDefaultModelName()];
+    const driver = this.resolveDriver(modelName);
 
     if (!driver) {
       throw new Error(`Selected model ${modelName} is not available`);
     }
 
     return await driver.run(message, sessionId, options);
+  }
+
+  // Variante conversacional para el chat tab: misma resolución que run() pero
+  // delega en driver.chat(), que devuelve el texto crudo del assistant.
+  async chat(
+    modelName: string,
+    message: string,
+    sessionId: string | undefined,
+    options: AgentPromptOption
+  ): Promise<string> {
+    const driver = this.resolveDriver(modelName);
+
+    if (!driver) {
+      throw new Error(`Selected model ${modelName} is not available`);
+    }
+
+    return await driver.chat(message, sessionId, options);
   }
 }

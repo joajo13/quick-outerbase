@@ -90,7 +90,7 @@ export default function QueryWindow({
   );
   const [savedKey, setSavedKey] = useState<string | undefined>(initialSavedKey);
   const [placeholders, setPlaceholders] = useState<Record<string, string>>({});
-  const { schema } = useSchema();
+  const { schema, currentSchemaName } = useSchema();
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -337,12 +337,13 @@ export default function QueryWindow({
         {
           selected: option?.text ?? "",
           schema: schema,
+          selectedSchema: currentSchemaName,
         }
       );
 
       return agentResponse;
     },
-    [agentDriver, schema]
+    [agentDriver, schema, currentSchemaName]
   );
 
   return (

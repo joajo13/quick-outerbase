@@ -3,6 +3,7 @@
  * available to Outerbase Studio.
  */
 
+import { builtinOpenChatTab } from "../builtin-tab/open-chat-tab";
 import { builtinOpenERDTab } from "../builtin-tab/open-erd-tab";
 import { builtinMassDropTableTab } from "../builtin-tab/open-mass-drop-table";
 import { builtinOpenQueryTab } from "../builtin-tab/open-query-tab";
@@ -16,6 +17,7 @@ export const scc = {
     openBuiltinTable: builtinOpenTableTab.open,
     openBuiltinSchema: builtinOpenSchemaTab.open,
     openBuiltinERD: builtinOpenERDTab.open,
+    openBuiltinChat: builtinOpenChatTab.open,
     openBuiltinMassDropTable: builtinMassDropTableTab.open,
 
     close: (keys: string[]) => {

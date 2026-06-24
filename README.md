@@ -21,6 +21,12 @@ Studio**, **DbGate**, **TablePlus** y **Outerbase Studio**.
 > respaldado por Outerbase**. Se distribuye bajo **AGPL-3.0** conservando la licencia y la
 > atribución originales (ver [Licencia](#licencia) y [`AVISO_LICENCIA.md`](./AVISO_LICENCIA.md)).
 
+## Novedades (v0.7.0)
+
+- **Navegación de schemas en Postgres:** el sidebar lista **todos** los schemas (no solo `public`); navegá y abrí tablas de cualquiera, con buscador `schema.tabla` y badge de schema activo que se mueve al elegirlo.
+- **Asistente IA (Ctrl/Cmd+B) con más contexto:** el DDL que ve el modelo ahora incluye `NOT NULL`, defaults, `UNIQUE`, comentarios de tabla/columna, índices y foreign keys.
+- **Tab de Chat conversacional:** charlá con el asistente para generar SQL a partir de tu schema (multi-turno; **genera, no ejecuta**), con botones "Abrir en editor" y "Copiar". Usa tu provider/API key configurada (Anthropic/OpenAI/Gemini).
+
 ## ¿Por qué quick-outerbase? (comparación honesta)
 
 | | quick-outerbase | Prisma Studio | Drizzle Studio | DbGate | TablePlus | Outerbase Studio (oficial) |

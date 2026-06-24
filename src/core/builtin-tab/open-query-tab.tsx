@@ -8,6 +8,10 @@ let QUERY_COUNTER = 2;
 export const builtinOpenQueryTab = createTabExtension<
   | {
       name?: string;
+      // SQL inicial transitorio para una query NUEVA (no guardada). Se usa, por
+      // ejemplo, desde el Chat para precargar el SQL generado en un tab de query
+      // normal sin convertirlo en una saved query.
+      initialCode?: string;
       saved?: {
         namespaceName?: string;
         key: string;
@@ -36,7 +40,7 @@ export const builtinOpenQueryTab = createTabExtension<
         initialNamespace={options.saved.namespaceName}
       />
     ) : (
-      <QueryWindow initialName={title} />
+      <QueryWindow initialName={title} initialCode={options?.initialCode} />
     );
 
     return {

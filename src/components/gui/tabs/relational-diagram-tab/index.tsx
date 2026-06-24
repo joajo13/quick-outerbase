@@ -87,11 +87,18 @@ function mapSchema(
 ): { initialNodes: Node[]; initialEdges: Edge[] } {
   const initialEdges: Edge[] = [];
 
+  // Guard: si selectedSchema no existe como key del schema (posible desync con
+  // la selección), no crasheamos — devolvemos un diagrama vacío.
+  const schemaTables = schema[selectedSchema];
+  if (!schemaTables) {
+    return { initialNodes: [], initialEdges: [] };
+  }
+
   // Keep name of all table that has relationship
   const tableNameWithRelationship = new Set<string>();
   const foreignKeyList = new Set<string>();
 
-  for (const item of schema[selectedSchema]) {
+  for (const item of schemaTables) {
     if (item.type !== "table") continue;
 
     // Get the relationship via column constraint

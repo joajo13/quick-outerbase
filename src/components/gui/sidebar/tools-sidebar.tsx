@@ -1,7 +1,7 @@
 "use client";
 import { scc } from "@/core/command";
 import ListButtonItem from "../list-button-item";
-import { Robot, TreeStructure } from "@phosphor-icons/react";
+import { ChatCircle, Robot, TreeStructure } from "@phosphor-icons/react";
 import { localSettingDialog } from "@/app/(outerbase)/local-setting-dialog";
 
 export default function SettingSidebar() {
@@ -13,6 +13,13 @@ export default function SettingSidebar() {
           scc.tabs.openBuiltinERD({});
         }}
         icon={TreeStructure}
+      />
+      <ListButtonItem
+        text="Chat"
+        onClick={() => {
+          scc.tabs.openBuiltinChat({});
+        }}
+        icon={ChatCircle}
       />
       {/* Acceso al setting de AI (API key) en modo local: abre el mismo dialog
           que usa el nav de cloud, pero acá queda visible en el visor standalone. */}

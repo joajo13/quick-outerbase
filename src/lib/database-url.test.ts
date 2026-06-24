@@ -1,11 +1,14 @@
 import { parseDatabaseUrl, DatabaseUrlError, redact } from "./database-url";
 
 describe("parseDatabaseUrl — inferencia de motor por scheme", () => {
-  test("postgres:// → postgres, default schema public", () => {
+  test("postgres:// sin ?schema -> schema undefined (sidebar lista todos los schemas)", () => {
     const r = parseDatabaseUrl("postgres://u:p@localhost:5432/db");
     expect(r.engine).toBe("postgres");
     expect(r.dialect).toBe("postgres");
-    expect(r.schema).toBe("public");
+    // Sin ?schema ya NO defaultea a "public": el sidebar lista TODOS los schemas.
+    expect(r.schema).toBeUndefined();
+    // Y la connection string nunca arrastra un schema= vacío.
+    expect(r.connectionString).not.toContain("schema=");
   });
 
   test("postgresql:// también → postgres", () => {

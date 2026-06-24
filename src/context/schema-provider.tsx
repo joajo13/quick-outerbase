@@ -7,6 +7,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { useAutoComplete } from "./auto-complete-provider";
@@ -20,12 +21,20 @@ const SchemaContext = createContext<{
   autoCompleteSchema: AutoCompletionSchema;
   currentSchemaName: string;
   refresh: () => void;
+  /**
+   * Selección explícita de schema por parte del usuario. A diferencia del schema
+   * que infiere fetchSchema(), esta sobrevive a refresh() (no la pisa getCurrentSchema).
+   */
+  selectSchema: (name: string) => void;
 }>({
   schema: {},
   autoCompleteSchema: {},
   currentSchema: [],
   currentSchemaName: "",
   refresh: () => {
+    throw new Error("Not implemented");
+  },
+  selectSchema: () => {
     throw new Error("Not implemented");
   },
 });
@@ -75,6 +84,15 @@ export function SchemaProvider({ children }: Readonly<PropsWithChildren>) {
     () => databaseDriver.getFlags().defaultSchema
   );
 
+  // Schema elegido manualmente por el usuario. Vive en un ref para que refresh()
+  // no lo pise con el search_path por defecto (que volvía a "public").
+  const manualSchemaRef = useRef<string | undefined>(undefined);
+
+  const selectSchema = useCallback((name: string) => {
+    manualSchemaRef.current = name;
+    setCurrentSchemaName(name);
+  }, []);
+
   const fetchSchema = useCallback(
     (refresh?: boolean) => {
       if (refresh) {
@@ -89,6 +107,12 @@ export function SchemaProvider({ children }: Readonly<PropsWithChildren>) {
         // We will use it to override the default schema
         if (databaseDriver.getFlags().supportUseStatement) {
           selectedSchema = await databaseDriver.getCurrentSchema();
+        }
+
+        // Si el usuario eligió un schema explícitamente, gana sobre lo que diga
+        // getCurrentSchema(): así refresh() no vuelve a saltar a "public".
+        if (manualSchemaRef.current) {
+          selectedSchema = manualSchemaRef.current;
         }
 
         return { schemaResult, selectedSchema };
@@ -156,9 +180,10 @@ export function SchemaProvider({ children }: Readonly<PropsWithChildren>) {
       currentSchema,
       currentSchemaName,
       refresh: fetchSchema,
+      selectSchema,
       autoCompleteSchema: generateAutoComplete(currentSchemaName, schema),
     };
-  }, [schema, fetchSchema, currentSchema, currentSchemaName]);
+  }, [schema, fetchSchema, currentSchema, currentSchemaName, selectSchema]);
 
   if (error || loading) {
     return <ConnectingDialog message={error} loading={loading} />;

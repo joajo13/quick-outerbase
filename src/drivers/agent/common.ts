@@ -51,18 +51,56 @@ export default abstract class CommonAgentDriverImplementation extends AgentBaseD
         ? "You are an expert in Amazon DynamoDB PartiQL. The user is using DynamoDB, which is queried with PartiQL (NOT standard relational SQL). You are given a user-selected statement and you will improve it."
         : "You are an expert in Amazon DynamoDB PartiQL. The user is using DynamoDB, which is queried with PartiQL (NOT standard relational SQL).";
 
+      const dynamoClosing = option.conversational
+        ? "Answer conversationally: briefly explain your reasoning, and put any PartiQL you generate inside ```sql fenced code blocks. Do not execute anything."
+        : "Only return a single PartiQL statement, wrapped in a ```sql code block.";
+
       return `${intro}
 
 ${PARTIQL_RULES}
 
-Only return a single PartiQL statement, wrapped in a \`\`\`sql code block.`;
+${dynamoClosing}`;
     }
 
-    if (option.selected) {
-      return `You are an SQL expert. User is using ${this.driver.getFlags().dialect}. You are given a user selected query and you will improve it. Only return SQL code`;
+    // Contexto extra para que el modelo no alucine tablas/columnas y respete
+    // el dialecto y el schema activo. Mantiene la intención original de Ctrl+B
+    // ("Only return SQL code") para no volver conversacional ese flujo.
+    const dialect = this.driver.getFlags().dialect;
+
+    const guidance: string[] = [
+      `You are an SQL expert. User is using ${dialect}.`,
+    ];
+
+    if (option.selectedSchema) {
+      guidance.push(
+        `The active schema is "${option.selectedSchema}". Use it by default for unqualified names.`
+      );
     }
 
-    return `You are an SQL expert. User is using ${this.driver.getFlags().dialect}.Only return SQL code`;
+    if (option.schema && Object.keys(option.schema).length > 1) {
+      guidance.push(
+        "The database has multiple schemas, so use schema-qualified names (schema.table) to avoid ambiguity."
+      );
+    }
+
+    guidance.push(
+      "Only use tables and columns that appear in the provided schema. Do NOT invent tables or columns that are not present; if something is not in the schema, say so rather than guessing."
+    );
+
+    if (option.conversational) {
+      // Chat tab: conversacional. Permite prosa + SQL en bloques ```sql.
+      guidance.push(
+        "Answer conversationally: briefly explain your reasoning and put any SQL you generate inside ```sql fenced code blocks. Do not execute anything."
+      );
+    } else if (option.selected) {
+      guidance.push(
+        "You are given a user selected query and you will improve it. Only return SQL code"
+      );
+    } else {
+      guidance.push("Only return SQL code");
+    }
+
+    return guidance.join(" ");
   }
 
   getSchemaContent(option: AgentPromptOption) {
@@ -102,7 +140,11 @@ Only return a single PartiQL statement, wrapped in a \`\`\`sql code block.`;
     throw new Error("We cannot generate good response");
   }
 
-  async run(
+  // Arma la sesión (system + schema + selección en el primer turno), agrega el
+  // mensaje del usuario, llama al proveedor y persiste el historial. Devuelve la
+  // respuesta CRUDA del assistant. Compartido por run() (Ctrl+B, text-to-SQL) y
+  // chat() (tab conversacional), para que ambos usen el mismo historial multi-turno.
+  private async runRaw(
     message: string,
     previousId: string | undefined,
     option: AgentPromptOption
@@ -147,7 +189,32 @@ Only return a single PartiQL statement, wrapped in a \`\`\`sql code block.`;
     });
 
     this.history[session.id] = session;
+    return result;
+  }
+
+  async run(
+    message: string,
+    previousId: string | undefined,
+    option: AgentPromptOption
+  ): Promise<string> {
+    const result = await this.runRaw(message, previousId, option);
     return this.processResult(result);
+  }
+
+  // Variante conversacional para el chat tab: devuelve el texto CRUDO del
+  // assistant sin pasar por processResult. Esto hace que funcione incluso con
+  // ChatGPT, cuyo processResult (heredado) tira si la respuesta no es SQL.
+  async chat(
+    message: string,
+    previousId: string | undefined,
+    option: AgentPromptOption
+  ): Promise<string> {
+    // Marca la sesión como conversacional para que getSystemContent permita
+    // prosa (el chat tab renderiza texto + bloques SQL), sin tocar Ctrl+B/run().
+    return await this.runRaw(message, previousId, {
+      ...option,
+      conversational: true,
+    });
   }
 
   constructor(protected driver: BaseDriver) {
@@ -158,33 +225,74 @@ Only return a single PartiQL statement, wrapped in a \`\`\`sql code block.`;
     schemaName: string | undefined,
     table: DatabaseTableSchema
   ): string {
+    const escapeId = (id: string) => this.driver.escapeId(id);
+
+    // Por columna: tipo + NOT NULL/DEFAULT/UNIQUE + comentario inline. Todos los
+    // campos son opcionales (sqlite no trae comments/defaults) → emitimos solo lo
+    // que está presente para no ensuciar el DDL ni romper si falta.
     const columns = table.columns
       .map((column) => {
-        return `${this.driver.escapeId(column.name)} ${column.type}`;
+        const parts = [`${escapeId(column.name)} ${column.type}`];
+
+        const constraint = column.constraint;
+        if (constraint?.notNull) {
+          parts.push("NOT NULL");
+        }
+
+        const defaultValue =
+          constraint?.defaultValue ?? constraint?.defaultExpression;
+        // Solo primitivos: evita "DEFAULT [object Object]" si llegara un objeto.
+        if (
+          typeof defaultValue === "string" ||
+          typeof defaultValue === "number" ||
+          typeof defaultValue === "boolean" ||
+          typeof defaultValue === "bigint"
+        ) {
+          parts.push(`DEFAULT ${String(defaultValue)}`);
+        }
+
+        if (constraint?.unique) {
+          parts.push("UNIQUE");
+        }
+
+        const line = parts.join(" ");
+
+        // El comentario va en su PROPIA línea ANTES de la columna. Si fuera inline
+        // (`def -- comment`), el `--` del SQL se comería la coma separadora que el
+        // join agrega después → CREATE TABLE malformado para columnas no-últimas.
+        // Aplanamos newlines del comentario para no dejar una línea SQL "bare"
+        // (sin `--`) dentro del CREATE TABLE cuando el comment es multilínea.
+        if (column.comment) {
+          const c = column.comment.replace(/\r?\n/g, " ");
+          return `-- ${c}\n${line}`;
+        }
+
+        return line;
       })
       .join(",\n");
 
     const fullTableName = schemaName
-      ? `${this.driver.escapeId(schemaName)}.${this.driver.escapeId(table.tableName ?? "")}`
-      : this.driver.escapeId(table.tableName ?? "");
+      ? `${escapeId(schemaName)}.${escapeId(table.tableName ?? "")}`
+      : escapeId(table.tableName ?? "");
 
     const primaryKeyPart =
       table.pk.length > 0
-        ? `, PRIMARY KEY (${table.pk.map(this.driver.escapeId).join(", ")})`
+        ? `, PRIMARY KEY (${table.pk.map(escapeId).join(", ")})`
         : "";
 
+    // FKs: a nivel columna (constraint.foreignKey) y a nivel tabla
+    // (table.constraints[].foreignKey). Antes se computaban y se tiraban (bug):
+    // ahora SÍ se appendean al cuerpo del CREATE TABLE.
     const foreignKeyPart: string[] = [];
     for (const column of table.columns) {
       if (column.constraint?.foreignKey) {
         foreignKeyPart.push(
           [
             "FOREIGN KEY",
-            column.name,
+            `(${escapeId(column.name)})`,
             "REFERENCES",
-            column.constraint.foreignKey.foreignTableName ?? "",
-            "(",
-            (column.constraint?.foreignKey?.foreignColumns ?? [])[0] ?? "",
-            ")",
+            escapeId(column.constraint.foreignKey.foreignTableName ?? ""),
+            `(${(column.constraint?.foreignKey?.foreignColumns ?? []).map(escapeId).join(", ")})`,
           ].join(" ")
         );
       }
@@ -195,16 +303,45 @@ Only return a single PartiQL statement, wrapped in a \`\`\`sql code block.`;
         foreignKeyPart.push(
           [
             "FOREIGN KEY",
-            `(${(constraint.foreignKey.columns ?? []).join(", ")})`,
+            `(${(constraint.foreignKey.columns ?? []).map(escapeId).join(", ")})`,
             "REFERENCES",
-            constraint.foreignKey.foreignTableName ?? "",
-            `(${(constraint.foreignKey.foreignColumns ?? []).join(", ")})`,
+            escapeId(constraint.foreignKey.foreignTableName ?? ""),
+            `(${(constraint.foreignKey.foreignColumns ?? []).map(escapeId).join(", ")})`,
           ].join(" ")
         );
       }
     }
 
-    return `CREATE TABLE ${fullTableName} (\n${columns}\n ${primaryKeyPart});`;
+    const foreignKeyClause =
+      foreignKeyPart.length > 0 ? `,\n ${foreignKeyPart.join(",\n ")}` : "";
+
+    // Comentario de tabla como línea previa al CREATE TABLE (Postgres).
+    // Aplanamos newlines por la misma razón que en los comentarios de columna.
+    const tableComment = table.comment
+      ? `-- ${table.comment.replace(/\r?\n/g, " ")}\n`
+      : "";
+
+    const createStatement = `${tableComment}CREATE TABLE ${fullTableName} (\n${columns}\n ${primaryKeyPart}${foreignKeyClause});`;
+
+    // Índices: skip los primary (ya cubiertos por PRIMARY KEY). Postgres trae la
+    // definición completa en index.definition; si no, la reconstruimos.
+    const indexStatements: string[] = [];
+    for (const index of table.indexes ?? []) {
+      if (index.primary) continue;
+
+      if (index.definition) {
+        indexStatements.push(`${index.definition};`);
+      } else {
+        const cols = (index.columns ?? []).map(escapeId).join(", ");
+        if (!cols) continue;
+        const unique = index.unique ? "UNIQUE " : "";
+        indexStatements.push(
+          `CREATE ${unique}INDEX ${escapeId(index.name)} ON ${fullTableName} (${cols});`
+        );
+      }
+    }
+
+    return [createStatement, ...indexStatements].join("\n");
   }
 
   protected convertSchemaToDDLContent(schemas: DatabaseSchemas): string {

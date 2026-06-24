@@ -93,8 +93,12 @@ interface PostgresConstraintRow {
 }
 
 export default class PostgresLikeDriver extends CommonSQLImplement {
-  // _schema: cuando viene seteado (flujo Prisma ?schema=X), la introspección
-  // se filtra SOLO a ese schema. Si no hay schema → comportamiento de siempre.
+  // _schema: se retiene por compatibilidad de API (env-driver lo sigue pasando
+  // desde el ?schema= de Prisma), pero el driver NO lo usa: ni filtra la
+  // introspección (schemas() lista SIEMPRE todos los schemas no-sistema) ni define
+  // el schema inicial. El schema inicial seleccionado sale del search_path de la
+  // conexión (proxy/db/route.ts setea `-c search_path=` desde ?schema=) que la UI
+  // lee de vuelta con getCurrentSchema(). Dejarlo no rompe a los callers existentes.
   constructor(
     protected _db: QueryableBaseDriver,
     protected _schema?: string
@@ -150,29 +154,25 @@ export default class PostgresLikeDriver extends CommonSQLImplement {
       rows: { search_path?: string | null }[];
     };
 
-    const db = result.rows[0].search_path!.split(",")[0];
-
-    return db === this.escapeId("$user") ? "public" : db;
+    const raw = result.rows[0].search_path!.split(",")[0].trim();
+    // Postgres puede reportar el primer item del search_path con o sin comillas
+    // ("$user" vs $user según versión/proxy). Sacamos las comillas envolventes
+    // para comparar de forma robusta y caer a "public" en los casos degradados
+    // ($user sin resolver o search_path vacío) en vez de devolver un nombre que
+    // no matchea ningún schema real.
+    const first = raw.replace(/^"(.*)"$/, "$1");
+    return first === "$user" || first === "" ? "public" : first;
   }
 
   async schemas(): Promise<DatabaseSchemas> {
-    const sv = (v: string) => this.escapeValue(v);
-    // Si hay un schema configurado (?schema=X), filtramos la introspección a ese
-    // schema únicamente: el árbol de tablas y el ERD muestran solo ese schema en
-    // vez de barrer toda la base. Cada query usa el nombre de columna que le toca.
-    const schema = this._schema?.trim();
-    const schemaNameFilter = schema ? ` AND schema_name = ${sv(schema)}` : "";
-    const tableSchemaFilter = schema ? ` AND table_schema = ${sv(schema)}` : "";
-    const tcSchemaFilter = schema ? ` AND tc.table_schema = ${sv(schema)}` : "";
-    const nspFilter = schema ? ` AND n.nspname = ${sv(schema)}` : "";
-
-    const schemaSql = `SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ('information_schema', 'pg_catalog', 'pg_toast')${schemaNameFilter}`;
+    // Listamos SIEMPRE todos los schemas no-sistema (y todas sus tablas/columnas/
+    // constraints). _schema NO filtra acá (ni en ningún lado del driver). Así el
+    // árbol y el ERD pueden navegar la base entera, no un solo schema.
+    const schemaSql = `SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ('information_schema', 'pg_catalog', 'pg_toast')`;
     const tableSql =
-      "SELECT *, pg_total_relation_size(quote_ident(table_schema) || '.' || quote_ident(table_name)) AS table_size FROM information_schema.tables WHERE table_schema NOT IN ('information_schema', 'pg_catalog', 'pg_toast')" +
-      tableSchemaFilter;
+      "SELECT *, pg_total_relation_size(quote_ident(table_schema) || '.' || quote_ident(table_name)) AS table_size FROM information_schema.tables WHERE table_schema NOT IN ('information_schema', 'pg_catalog', 'pg_toast')";
     const columnSql =
-      "SELECT * FROM information_schema.columns WHERE table_schema NOT IN ('information_schema', 'pg_catalog', 'pg_toast')" +
-      tableSchemaFilter;
+      "SELECT * FROM information_schema.columns WHERE table_schema NOT IN ('information_schema', 'pg_catalog', 'pg_toast')";
     const constraintSql = `SELECT
 	tc.constraint_name,
 	tc.table_schema,
@@ -196,17 +196,17 @@ FROM
 		ccu.constraint_name = kcu.constraint_name
 	)
 WHERE
-	tc.table_schema NOT IN ('information_schema', 'pg_catalog', 'pg_toast')${tcSchemaFilter}`;
+	tc.table_schema NOT IN ('information_schema', 'pg_catalog', 'pg_toast')`;
 
     const tableCommentSql = `SELECT n.nspname AS table_schema, c.relname AS table_name, obj_description(c.oid,'pg_class') AS comment
 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-WHERE c.relkind IN ('r','v','m','p') AND n.nspname NOT IN ('information_schema','pg_catalog','pg_toast') AND obj_description(c.oid,'pg_class') IS NOT NULL${nspFilter}`;
+WHERE c.relkind IN ('r','v','m','p') AND n.nspname NOT IN ('information_schema','pg_catalog','pg_toast') AND obj_description(c.oid,'pg_class') IS NOT NULL`;
 
     const columnCommentSql = `SELECT n.nspname AS table_schema, c.relname AS table_name, a.attname AS column_name, col_description(a.attrelid, a.attnum) AS comment
 FROM pg_attribute a
 JOIN pg_class c ON c.oid = a.attrelid
 JOIN pg_namespace n ON n.oid = c.relnamespace
-WHERE a.attnum > 0 AND NOT a.attisdropped AND n.nspname NOT IN ('information_schema','pg_catalog','pg_toast') AND col_description(a.attrelid, a.attnum) IS NOT NULL${nspFilter}`;
+WHERE a.attnum > 0 AND NOT a.attisdropped AND n.nspname NOT IN ('information_schema','pg_catalog','pg_toast') AND col_description(a.attrelid, a.attnum) IS NOT NULL`;
 
     const result = await this.batch([
       schemaSql,

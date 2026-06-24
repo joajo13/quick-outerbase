@@ -17,7 +17,8 @@ interface EnvDbInfo {
   engine: string;
   dialect: SupportedDialect;
   name: string;
-  schema: string;
+  /** Schema inicial de Postgres (?schema=). undefined cuando no se pasó. */
+  schema?: string;
   /** Solo dynamodb: región/endpoint (sin secretos). */
   region?: string;
   endpoint?: string;
@@ -39,8 +40,9 @@ export default function EnvPageBody() {
 
   const driver = useMemo(() => {
     if (!info) return null;
-    // Pasamos el schema configurado (?schema=) para que Postgres filtre la
-    // introspección a ese schema. En DBs sin schema, info.schema viene vacío.
+    // Pasamos el schema configurado (?schema=) como schema INICIAL seleccionado
+    // de Postgres (NO filtra la introspección: se listan todos los schemas).
+    // En DBs sin schema, info.schema viene undefined/vacío.
     // Para dynamodb pasamos región/endpoint (sin creds: las pone el server).
     return createEnvDriver(info.dialect, info.schema, {
       region: info.region,

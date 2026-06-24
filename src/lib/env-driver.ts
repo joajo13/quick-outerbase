@@ -20,8 +20,11 @@ export interface EnvDriverOptions {
  * El dialecto lo decide el server (inferido del scheme) y se inyecta
  * el transporte NodeProxyQueryable que pega a /proxy/db.
  *
- * `schema` es el schema configurado (Prisma ?schema=X). Cuando viene, el driver
- * de Postgres filtra la introspección a ese schema (árbol y ERD muestran solo ese).
+ * `schema` (Prisma ?schema=X) se pasa al driver de Postgres por compatibilidad,
+ * pero NO filtra la introspección: el árbol y el ERD listan TODOS los schemas
+ * no-sistema (ver postgres-driver.schemas()). El schema inicial seleccionado lo
+ * define el search_path de la conexión (proxy/db/route.ts) leído con
+ * getCurrentSchema(), no este parámetro.
  *
  * DynamoDB es el caso especial: usa su propio proxy (/proxy/dynamodb) y NO recibe
  * credenciales — solo región/endpoint. Las creds las resuelve el server desde la

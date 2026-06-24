@@ -40,8 +40,6 @@ function prepareListViewItem(
     let icon = Table;
     let iconClassName = "";
 
-    console.log("ss", s);
-
     if (s.type === "trigger") {
       icon = LucideCog;
       iconClassName = "text-purple-500";
@@ -157,7 +155,7 @@ async function downloadExportTable(
 export default function SchemaList({ search }: Readonly<SchemaListProps>) {
   const { databaseDriver, extensions } = useStudioContext();
   const [selected, setSelected] = useState("");
-  const { refresh, schema, currentSchemaName } = useSchema();
+  const { refresh, schema, currentSchemaName, selectSchema } = useSchema();
   const [editSchema, setEditSchema] = useState<string | null>(null);
 
   const [collapsed, setCollapsed] = useState(() => {
@@ -318,7 +316,16 @@ export default function SchemaList({ search }: Readonly<SchemaListProps>) {
   const filterCallback = useCallback(
     (item: ListViewItem<DatabaseSchemaItem>) => {
       if (!search) return true;
-      return item.name.toLowerCase().indexOf(search.toLowerCase()) >= 0;
+      const needle = search.toLowerCase();
+      const name = item.name.toLowerCase();
+      // "schema.table": los nodos de schema llevan su nombre en item.name; las
+      // tablas/vistas llevan su schema en data.schemaName. Permitimos buscar tanto
+      // por nombre suelto ("orders") como cualificado ("ventas.", "ventas.orders").
+      const qualified =
+        item.data.type !== "schema" && item.data.schemaName
+          ? `${item.data.schemaName}.${item.name}`.toLowerCase()
+          : name;
+      return name.indexOf(needle) >= 0 || qualified.indexOf(needle) >= 0;
     },
     [search]
   );
@@ -354,6 +361,10 @@ export default function SchemaList({ search }: Readonly<SchemaListProps>) {
               tableName: item.data.tableName ?? "",
             });
           } else if (item.data.type === "schema") {
+            // Movemos el badge activo ya mismo (optimista) y lo fijamos como
+            // selección manual: sobrevive al refresh() de abajo aunque el
+            // search_path por defecto siga apuntando a otro lado.
+            selectSchema(item.name);
             if (databaseDriver.getFlags().supportUseStatement) {
               const dialect = databaseDriver.getFlags().dialect;
               const switch_keyword =

@@ -171,6 +171,12 @@ export default function DatabaseGui() {
             },
           }
         : undefined,
+      {
+        text: "Chat",
+        onClick: () => {
+          scc.tabs.openBuiltinChat({});
+        },
+      },
     ].filter(Boolean) as { text: string; onClick: () => void }[];
   }, [currentSchemaName, databaseDriver]);
 

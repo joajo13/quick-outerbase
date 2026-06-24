@@ -18,8 +18,12 @@ export interface ParsedDatabaseUrl {
   dialect: SupportedDialect;
   /** Connection string limpio para el driver Node (sin el param ?schema). */
   connectionString: string;
-  /** Schema de Postgres (estilo Prisma ?schema=public). Default "public". */
-  schema: string;
+  /**
+   * Schema INICIAL de Postgres (estilo Prisma ?schema=). Solo define el schema
+   * seleccionado al arrancar — NO filtra la introspección. `undefined` cuando no
+   * se pasó (ya NO defaultea a "public": el sidebar lista todos los schemas).
+   */
+  schema?: string;
   /** authToken para libsql/Turso (de la URL o env). */
   authToken?: string;
   /** Nombre legible para mostrar en la UI (db o archivo), sin secretos. */
@@ -58,7 +62,9 @@ function extractScheme(raw: string): string {
 /** Oculta credenciales para mensajes de error / logs. */
 export function redact(raw: string): string {
   try {
-    return raw.replace(/\/\/([^:/@]+):([^@]+)@/, "//$1:***@");
+    // Flag global: si el mensaje embebe más de una connection string, las
+    // enmascaramos a todas (no solo la primera).
+    return raw.replace(/\/\/([^:/@]+):([^@]+)@/g, "//$1:***@");
   } catch {
     return "***";
   }
@@ -95,7 +101,7 @@ export function parseDatabaseUrl(raw: string): ParsedDatabaseUrl {
 function parsePostgres(input: string): ParsedDatabaseUrl {
   // pg-connection-string no entiende ?schema= (param de Prisma): lo extraemos y limpiamos.
   const u = new URL(input);
-  const schema = u.searchParams.get("schema") || "public";
+  const schema = u.searchParams.get("schema") || undefined;
   u.searchParams.delete("schema");
   const connectionString = u.toString();
   const displayName = u.pathname.replace(/^\//, "") || "postgres";
