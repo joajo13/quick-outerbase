@@ -90,7 +90,7 @@ jobs:
 
       # Atestación de build provenance del .tar.gz (cadena de confianza del asset).
       - name: Attest build provenance del bundle
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: quick-outerbase-${{ matrix.target }}.tar.gz
 
