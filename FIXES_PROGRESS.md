@@ -30,3 +30,28 @@ Tracking the 3 bug fixes in quick-outerbase. Working one at a time, in order.
 - Root cause: row was `flex items-end gap-2`; the Button's default size variant hardcodes `h-9`, so it never matched the taller textarea.
 - Fix (minimal, src/components/gui/tabs/chat-tab.tsx): row → `flex items-stretch gap-2` and Button gets `className="h-auto"` (twMerge overrides the variant `h-9`), so the button stretches to the textarea's height. Both edges now line up.
 - Verify: measured `getBoundingClientRect()` of textarea vs button at widths 320 / 380 / 480 / 1568 px — top delta = bottom delta = height delta = **0** at every width; both 50px tall, side by side. Visual zoom confirmed the matched-height input bar.
+
+---
+
+# Session 2 — follow-ups (shipping as v0.7.2)
+
+## Bug 4 — AI Chat tab: `Cannot read properties of undefined (reading '0')`
+- Status: **FIX IMPLEMENTED + UNIT-TESTED; browser verification of a real OpenAI response is BLOCKED** (see note).
+- Repro path (code-traced + partially browser-confirmed): the OpenAI/ChatGPT driver (`src/drivers/agent/chatgpt.ts`) did `jsonResponse.choices[0].message.content` with NO error handling. When OpenAI returns an error response (`{error:{message}}`, no `choices`), `choices[0]` throws exactly "Cannot read properties of undefined (reading '0')". Anthropic & Gemini drivers already handle `json.error`; ChatGPT did not.
+- Why OpenAI errored for the user (most likely): the driver **hardcoded `model: "gpt-4o-mini"`** and IGNORED the user's configured model (`gpt-5.1-2025-11-13` seen in the AI Settings dialog). `buildProviderDriver` (list.tsx) never passed `config.model` to `ChatGPTDriver`. If the user's key has no access to gpt-4o-mini (or it's retired), OpenAI returns `{error}` → no choices → crash.
+- Fix (minimal, mirrors Anthropic/Gemini):
+  - `chatgpt.ts`: constructor now takes `model` (default "gpt-4o-mini") and `query()` sends `this.model`; checks `if (json.error) throw new Error(json.error.message)`; guards `choices?.[0]?.message?.content` and throws a readable error if absent.
+  - `list.tsx`: `buildProviderDriver` passes `config.model` to `new ChatGPTDriver(...)`.
+- Tests: `agent.test.ts` — 4 new cases (mock fetch): sends the CONFIGURED model (not gpt-4o-mini); `{error}` → readable throw, NOT "reading '0'"; no-choices → defensive throw; success → returns content. 27/27 agent tests pass.
+- Browser repro caveat: in the Playwright sandbox, `api.openai.com` is **CORS-blocked** (no `Access-Control-Allow-Origin`) — `httpbin` and `api.anthropic.com` ARE reachable, so it's OpenAI-specific, not a network outage. So a dummy key here yields "Failed to fetch", while the user's Chrome (where OpenAI IS reachable) yields the `{error}`→"reading '0'". I cannot get a real OpenAI response from the test browser, and the user's Chrome extension (Claude-in-Chrome) disconnected → **needs user input to complete the in-browser "real response" verification.**
+
+## JSX → React.JSX migration (fix the failing Dependabot `Check`)
+- Status: **DONE** ✅ (tsc verified green under BOTH @types/react 18.3.31 AND 19.2.17 / @types/react-dom 19.2.3)
+- Why: Dependabot's `minor-and-patch` PR bumps `@types/react`→19.2.x, which removed the global `JSX` namespace (now `React.JSX`) and made `useRef<T>(null)` return `RefObject<T | null>`. That broke the PR's typecheck (TS2503 `Cannot find namespace 'JSX'` ×5, TS2322 RefObject ×1). The release of v0.7.1 itself was fine; these are the 2 red Dependabot runs.
+- Fix (backward-compatible with 18, forward-compatible with 19):
+  - `JSX.Element` → `React.JSX.Element` in 5 files (channel-builtin.tsx, selectable-table.tsx, windows-tab.tsx, query-placeholder.tsx, saved-doc-tab/index.tsx), adding a React import where missing.
+  - RefObject: widened `containerRef` param (use-visibility-calculation.ts) and `useElementResize` `ref` param to `RefObject<T | null>` (≡ `RefObject<T>` under @types/react 18); used the already-narrowed `ref` const instead of `containerRef.current` at the addEventListener line; updated the hook test's `useRef<HTMLDivElement | null>(container)`.
+- Verify: `tsc --noEmit` exit 0 under 18.3.31 (committed lockfile) AND under 19.2.17 (installed via `--no-save`, then reverted). package.json/lock left on ^18 — Dependabot's PR does the actual bump; our code is now compatible so its Check will pass once it rebases onto main.
+
+## Shipping (v0.7.2)
+- Bump root + launcher package.json to 0.7.2, commit, push tag `v0.7.2` (only AFTER browser verification of the chat fix).
