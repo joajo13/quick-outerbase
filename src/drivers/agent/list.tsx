@@ -1,6 +1,6 @@
 import { ReactElement } from "react";
 import { BaseDriver } from "../base-driver";
-import { AgentBaseDriver, AgentPromptOption } from "./base";
+import { AgentBaseDriver, AgentPromptOption, AgentStreamCallback } from "./base";
 import { AnthropicDriver } from "./anthropic";
 import { ChatGPTDriver } from "./chatgpt";
 // DEPRECATED: cloudflare — agent free-tier de Cloudflare Workers AI sacado del build.
@@ -166,5 +166,24 @@ export default class AgentDriverList {
     }
 
     return await driver.chat(message, sessionId, options);
+  }
+
+  // Variante STREAMING para el chat tab: misma resolución que chat() pero delega en
+  // driver.chatStream(), que emite el texto token a token vía onEvent. Aditivo: no
+  // toca run()/chat().
+  async chatStream(
+    modelName: string,
+    message: string,
+    sessionId: string | undefined,
+    options: AgentPromptOption,
+    onEvent: AgentStreamCallback
+  ): Promise<string> {
+    const driver = this.resolveDriver(modelName);
+
+    if (!driver) {
+      throw new Error(`Selected model ${modelName} is not available`);
+    }
+
+    return await driver.chatStream(message, sessionId, options, onEvent);
   }
 }
