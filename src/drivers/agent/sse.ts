@@ -45,6 +45,15 @@ export async function readSSEStream(
     if (buffer.length > 0) {
       await handleLine(buffer, onData);
     }
+  } catch (err) {
+    // Path de error (p.ej. el callback tira ante un evento "error" del provider):
+    // cancelamos el body para no dejar la conexión colgada antes de re-lanzar.
+    try {
+      await reader.cancel();
+    } catch {
+      // el stream ya pudo haberse cerrado: lo ignoramos
+    }
+    throw err;
   } finally {
     reader.releaseLock();
   }

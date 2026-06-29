@@ -56,6 +56,20 @@ describe("mergeAgentConfig — merge parcial puro", () => {
     const out = mergeAgentConfig(undefined, { model: "x" });
     expect(out).toEqual({ provider: "anthropic", model: "x", token: "" });
   });
+
+  test("token:'' explícito limpia la key (cambio de provider la invalida)", () => {
+    // El provider-picker manda token:'' al cambiar de provider: la key vieja es de
+    // otro provider. mergeAgentConfig debe respetar el '' y NO recuperar el viejo.
+    const out = mergeAgentConfig(
+      { provider: "anthropic", model: "claude-opus-4-8", token: "sk-ant" },
+      { provider: "openai", model: DEFAULT_MODEL_BY_PROVIDER.openai, token: "" }
+    );
+    expect(out).toEqual({
+      provider: "openai",
+      model: DEFAULT_MODEL_BY_PROVIDER.openai,
+      token: "",
+    });
+  });
 });
 
 describe("getAgentFromLocalStorage — parseo defensivo", () => {

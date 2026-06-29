@@ -249,11 +249,15 @@ ${dynamoClosing}`;
   // token a token vía onEvent. Acumula el texto y lo persiste igual que chat().
   //
   // Hard fallback (centralizado acá, no duplicado en cada provider): si queryStream
-  // tira ANTES de emitir nada (caso típico: HTTP no-ok, CORS, red, o un modelo que
-  // rechaza el flag de reasoning), caemos al query() no-streaming y emitimos un único
-  // evento "text" con toda la respuesta. Si ya emitió tokens y después explota, no
-  // rehacemos la respuesta (duplicaría): cerramos con un "error". Nunca tira: siempre
-  // resuelve emitiendo "done", para que la UI event-driven cierre el turno.
+  // tira SIN haber emitido TEXTO (caso típico: HTTP no-ok, CORS, red, un modelo que
+  // rechaza el flag de reasoning, o un error SSE que llega DESPUÉS del reasoning pero
+  // ANTES del texto), caemos al query() no-streaming y emitimos un único evento "text"
+  // con toda la respuesta. La decisión gatea por TEXTO real mostrado al usuario, NO
+  // por reasoning: el reasoning va a un bloque aparte y no es "la respuesta", así que
+  // si solo hubo reasoning todavía es seguro (y deseable) reintentar por el camino
+  // no-streaming. Si ya salió texto y después explota, NO rehacemos (duplicaría):
+  // cerramos con un "error". Nunca tira: siempre resuelve emitiendo "done", para que
+  // la UI event-driven cierre el turno.
   async chatStream(
     message: string,
     previousId: string | undefined,
@@ -265,17 +269,14 @@ ${dynamoClosing}`;
       conversational: true,
     });
 
+    // Acumulamos el texto VISIBLE para: (a) persistir el historial y (b) decidir si el
+    // hard fallback es seguro. El reasoning NO se acumula acá a propósito (no es la
+    // respuesta y no debe inhibir el fallback).
     let text = "";
-    let emittedAny = false;
 
-    // Envoltura: acumulamos el texto y marcamos si ya salió ALGO al usuario, para
-    // decidir si el fallback es seguro (sin duplicar) ante un fallo a mitad de stream.
     const wrapped: AgentStreamCallback = (event) => {
       if (event.type === "text") {
         text += event.delta;
-        emittedAny = true;
-      } else if (event.type === "reasoning" || event.type === "tool_call") {
-        emittedAny = true;
       }
       onEvent(event);
     };
@@ -289,8 +290,8 @@ ${dynamoClosing}`;
       onEvent({ type: "done" });
       return text;
     } catch (streamError) {
-      if (emittedAny) {
-        // Ya mostramos tokens: no podemos rehacer la respuesta sin duplicarla.
+      if (text) {
+        // Ya mostramos TEXTO real: no podemos rehacer la respuesta sin duplicarla.
         onEvent({
           type: "error",
           message:
@@ -298,12 +299,12 @@ ${dynamoClosing}`;
               ? streamError.message
               : "El stream se interrumpió",
         });
-        if (text) this.persistAssistant(session, text);
+        this.persistAssistant(session, text);
         onEvent({ type: "done" });
         return text;
       }
 
-      // Fallback duro: el stream nunca arrancó → usamos el camino no-streaming.
+      // No salió texto (a lo sumo reasoning) → fallback duro al camino no-streaming.
       try {
         text = await this.query(session.messages);
         this.persistAssistant(session, text);

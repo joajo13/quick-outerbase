@@ -218,6 +218,38 @@ describe("chatStream — hard fallback al query() no-streaming", () => {
     expect(c.events.some((e) => e.type === "done")).toBe(true);
   });
 
+  test("si solo hubo reasoning antes del fallo, cae al fallback (no se pierde la respuesta)", async () => {
+    // 1ª (queryStream): emite thinking (reasoning) y después un evento error → tira,
+    // pero con text vacío. 2ª (query no-stream): responde OK. El fallback debe correr.
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce(
+        sseResponse([
+          'event: content_block_delta\ndata: {"type":"content_block_delta","delta":{"type":"thinking_delta","thinking":"pienso"}}\n\n',
+          'event: error\ndata: {"type":"error","error":{"message":"overloaded"}}\n\n',
+        ])
+      )
+      .mockResolvedValueOnce({
+        json: async () => ({
+          content: [{ type: "text", text: "SELECT 99" }],
+        }),
+      } as Response) as unknown as typeof fetch;
+
+    const driver = new AnthropicDriver(fakeDriver(), "sk-ant", "claude-opus-4-8");
+    const c = collect();
+    const out = await driver.chatStream(
+      "hola",
+      undefined,
+      { selected: "" },
+      c.push
+    );
+
+    expect(out).toBe("SELECT 99");
+    expect(reasonings(c.events)).toEqual(["pienso"]);
+    expect(texts(c.events)).toEqual(["SELECT 99"]);
+    expect(c.events[c.events.length - 1]).toEqual({ type: "done" });
+  });
+
   test("camino feliz: streamea y persiste el texto acumulado", async () => {
     global.fetch = jest.fn().mockResolvedValue(
       sseResponse([

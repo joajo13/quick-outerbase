@@ -35,16 +35,21 @@ export const providerPickerDialog = createDialog(({ close }) => {
   const changed = provider !== current?.provider;
 
   const onSave = () => {
-    // Reset del modelo al default del provider elegido. patchAgentConfig mergea sobre
-    // la config actual (mantiene el token) y mutea el SWR → header/driver se re-arman.
+    // Reset del modelo al default del provider elegido. Si CAMBIÓ el provider, además
+    // LIMPIAMOS el token: la config guarda una sola key y la anterior es de OTRO
+    // provider — dejarla colgada mandaría una key inválida (401 silencioso) y rompería
+    // tanto el chat como el Ctrl+B text-to-SQL, que comparten esta config. Mejor quedar
+    // sin key (estado "configurá IA" explícito) que con una key equivocada.
     patchAgentConfig({
       provider,
       model: DEFAULT_MODEL_BY_PROVIDER[provider],
+      ...(changed ? { token: "" } : {}),
     });
     close(undefined);
 
-    // Sin key → ofrecemos pegarla (la key anterior, si la había, es de otro provider).
-    if (!current?.token) {
+    // Si cambió el provider (key vieja inservible) o no había key, abrimos el dialog
+    // para que el usuario pegue la key correcta del provider nuevo.
+    if (changed || !current?.token) {
       localSettingDialog.show({}).then().catch();
     }
   };
