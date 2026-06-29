@@ -15,7 +15,7 @@ import {
   sortableKeyboardCoordinates,
 } from "@dnd-kit/sortable";
 import { type LucideIcon, LucidePlus } from "lucide-react";
-import {
+import React, {
   createContext,
   useCallback,
   useContext,
@@ -32,7 +32,7 @@ import {
 import { SortableTab } from "./sortable-tab";
 
 export interface WindowTabItemProps {
-  component: JSX.Element;
+  component: React.JSX.Element;
   icon: LucideIcon;
   title: string;
   identifier: string;

@@ -73,7 +73,9 @@ export default function useTableVisibilityRecalculation({
   headers,
   state,
 }: {
-  containerRef: React.RefObject<HTMLDivElement>;
+  // RefObject<HTMLDivElement | null>: en @types/react 19 `useRef<T>(null)` devuelve
+  // RefObject<T | null> (antes era RefObject<T>). Equivalente bajo @types/react 18.
+  containerRef: React.RefObject<HTMLDivElement | null>;
   totalRowCount: number;
   rowHeight: number;
   renderAhead: number;
@@ -143,7 +145,7 @@ export default function useTableVisibilityRecalculation({
         e.stopPropagation();
       };
 
-      containerRef.current.addEventListener("scroll", onContainerScroll);
+      ref.addEventListener("scroll", onContainerScroll);
       return () => ref.removeEventListener("scroll", onContainerScroll);
     }
   }, [containerRef, recalculateVisible]);

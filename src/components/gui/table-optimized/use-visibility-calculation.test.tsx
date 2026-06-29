@@ -60,7 +60,7 @@ test("recalculateVisible: bail-out devuelve el MISMO rango si no cambió (sin ch
   const container = makeContainer();
 
   const { result } = renderHook(() => {
-    const containerRef = useRef<HTMLDivElement>(container);
+    const containerRef = useRef<HTMLDivElement | null>(container);
     return useTableVisibilityRecalculation({
       containerRef,
       headers,

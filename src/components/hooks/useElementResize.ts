@@ -2,7 +2,9 @@ import { useEffect, useRef } from "react";
 
 export default function useElementResize<T extends Element = Element>(
   callback: (element: T) => void,
-  ref: React.RefObject<T>
+  // RefObject<T | null>: @types/react 19 tipa useRef<T>(null) como RefObject<T | null>.
+  // Equivalente a RefObject<T> bajo @types/react 18 (current ya era T | null).
+  ref: React.RefObject<T | null>
 ) {
   // Guard de reentrancia: el callback típicamente hace setState, lo que
   // re-renderiza y puede reconectar el ResizeObserver. La "initial observation"
