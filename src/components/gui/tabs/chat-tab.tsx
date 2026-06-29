@@ -5,21 +5,81 @@ import { Button } from "@/components/ui/button";
 import { useStudioContext } from "@/context/driver-provider";
 import { useSchema } from "@/context/schema-provider";
 import { scc } from "@/core/command";
+import { AgentStreamEvent } from "@/drivers/agent/base";
 import { SupportedDialect } from "@/drivers/base-driver";
 import { generateId } from "@/lib/generate-id";
 import {
   ArrowSquareOut,
+  CaretDown,
+  CaretRight,
   Copy,
   PaperPlaneTilt,
   Robot,
   Sparkle,
+  Wrench,
 } from "@phosphor-icons/react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import ChatShimmer from "./chat-shimmer";
+import ChatTabHeader from "./chat-tab-header";
+
+interface ToolCall {
+  id: string;
+  name: string;
+  args?: string;
+}
 
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
+  // Razonamiento del modelo (Anthropic/Gemini con flag). Se renderiza en un bloque
+  // colapsable arriba del texto. OpenAI no lo expone → queda vacío.
+  reasoning?: string;
+  // Tool-calls: scaffold display-only (hoy no se emiten). Se dibujan como chips.
+  toolCalls?: ToolCall[];
+  // El turno del assistant todavía está streameando (controla shimmer + auto-colapso).
+  streaming?: boolean;
+}
+
+// Aplica un evento del stream al ÚLTIMO mensaje (que siempre es el assistant en
+// curso). Devuelve un array nuevo (inmutable) para que React re-renderice.
+function applyEvent(
+  messages: ChatMessage[],
+  event: AgentStreamEvent
+): ChatMessage[] {
+  const idx = messages.length - 1;
+  if (idx < 0) return messages;
+
+  const last = messages[idx];
+  if (last.role !== "assistant") return messages;
+
+  const next: ChatMessage = { ...last };
+  switch (event.type) {
+    case "text":
+      next.content = (next.content || "") + event.delta;
+      break;
+    case "reasoning":
+      next.reasoning = (next.reasoning || "") + event.delta;
+      break;
+    case "tool_call":
+      next.toolCalls = [
+        ...(next.toolCalls || []),
+        { id: event.id, name: event.name, args: event.args },
+      ];
+      break;
+    case "error":
+      // Si no hubo nada de texto, mostramos el error como contenido del turno.
+      next.content = next.content || "Error: " + event.message;
+      next.streaming = false;
+      break;
+    case "done":
+      next.streaming = false;
+      break;
+  }
+
+  const copy = messages.slice();
+  copy[idx] = next;
+  return copy;
 }
 
 // Segmento de un mensaje del assistant: o bien prosa (texto) o un bloque de
@@ -168,6 +228,73 @@ function AssistantMessage({
   );
 }
 
+// Bloque colapsable de razonamiento ("Razonando…"). Mientras el assistant streamea,
+// arranca abierto para que se vea el reasoning en vivo; cuando termina (streaming →
+// false) se auto-colapsa. El usuario puede togglearlo a mano en cualquier momento.
+function ReasoningBlock({
+  reasoning,
+  streaming,
+}: {
+  reasoning: string;
+  streaming?: boolean;
+}) {
+  const [open, setOpen] = useState(true);
+  // userToggled: si el usuario tocó el bloque, respetamos su decisión y no
+  // auto-colapsamos al terminar.
+  const userToggled = useRef(false);
+
+  useEffect(() => {
+    if (!streaming && !userToggled.current) {
+      setOpen(false);
+    }
+  }, [streaming]);
+
+  return (
+    <div className="mb-2 rounded-md border border-dashed">
+      <button
+        type="button"
+        onClick={() => {
+          userToggled.current = true;
+          setOpen((v) => !v);
+        }}
+        className="flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-xs font-medium opacity-70"
+      >
+        {open ? (
+          <CaretDown className="h-3 w-3" />
+        ) : (
+          <CaretRight className="h-3 w-3" />
+        )}
+        {streaming ? "Razonando…" : "Razonamiento"}
+      </button>
+      {open && (
+        <div className="border-t px-3 py-2 text-xs whitespace-pre-wrap opacity-70">
+          {reasoning}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Chips de tool-calls. Scaffold: hoy no se emiten (no hay tools reales), pero si
+// llegaran eventos tool_call en el stream, la UI ya sabe dibujarlos.
+function ToolCallChips({ toolCalls }: { toolCalls: ToolCall[] }) {
+  if (toolCalls.length === 0) return null;
+  return (
+    <div className="mb-2 flex flex-wrap gap-1.5">
+      {toolCalls.map((tc) => (
+        <span
+          key={tc.id}
+          className="inline-flex items-center gap-1 rounded-full border bg-neutral-50 px-2 py-0.5 text-xs dark:bg-neutral-950"
+          title={tc.args}
+        >
+          <Wrench className="h-3 w-3" />
+          {tc.name}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export default function ChatWindow() {
   const { agentDriver, databaseDriver } = useStudioContext();
   const { schema, currentSchemaName } = useSchema();
@@ -195,15 +322,28 @@ export default function ChatWindow() {
     if (!text || loading || !agentDriver || !agentDriver.hasUsableModel()) return;
 
     setInput("");
-    setMessages((prev) => [...prev, { role: "user", content: text }]);
+    // Empujamos el turno del usuario + un placeholder de assistant en streaming.
+    // El placeholder es el ÚLTIMO mensaje: applyEvent siempre actualiza ese.
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", content: text },
+      {
+        role: "assistant",
+        content: "",
+        reasoning: "",
+        toolCalls: [],
+        streaming: true,
+      },
+    ]);
     setLoading(true);
     scrollToBottom();
 
     try {
-      // chat() devuelve el texto crudo del assistant (markdown, con posibles
-      // bloques ```sql). NO usamos run() porque recorta a SQL y tira error en
-      // prosa. NO se ejecuta nada: solo se genera y se muestra.
-      const reply = await agentDriver.chat(
+      // chatStream() emite el texto token a token vía onEvent (text/reasoning/
+      // tool_call/done/error). Arma la MISMA sesión multi-turno que chat() y persiste
+      // el historial. NO se ejecuta nada: solo se genera y se muestra. Si el stream
+      // falla, el driver cae solo al query() no-streaming (hard fallback).
+      await agentDriver.chatStream(
         agentDriver.getDefaultModelName(),
         text,
         sessionId.current,
@@ -211,20 +351,22 @@ export default function ChatWindow() {
           selected: "",
           schema,
           selectedSchema: currentSchemaName,
+        },
+        (event) => {
+          setMessages((prev) => applyEvent(prev, event));
+          if (event.type === "text") scrollToBottom();
         }
       );
-
-      setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
     } catch (e) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content:
-            "Error: " +
-            (e instanceof Error ? e.message : "no se pudo generar la respuesta"),
-        },
-      ]);
+      // chatStream no debería tirar (emite "error" como evento), pero por las dudas
+      // (p.ej. resolveDriver sin driver) cerramos el turno con el error visible.
+      setMessages((prev) =>
+        applyEvent(prev, {
+          type: "error",
+          message:
+            e instanceof Error ? e.message : "no se pudo generar la respuesta",
+        })
+      );
     } finally {
       setLoading(false);
       scrollToBottom();
@@ -237,6 +379,14 @@ export default function ChatWindow() {
     currentSchemaName,
     scrollToBottom,
   ]);
+
+  // Nuevo chat: limpia los mensajes y rota el sessionId → el driver arranca un
+  // historial in-memory fresco (re-manda system + schema en el próximo turno).
+  const onNewChat = useCallback(() => {
+    setMessages([]);
+    setInput("");
+    sessionId.current = generateId();
+  }, []);
 
   const onKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -280,6 +430,8 @@ export default function ChatWindow() {
 
   return (
     <div className="flex h-full flex-col">
+      <ChatTabHeader onNewChat={onNewChat} />
+
       <div
         ref={scrollRef}
         className="flex grow flex-col gap-4 overflow-y-auto p-4"
@@ -296,20 +448,38 @@ export default function ChatWindow() {
 
         {messages.map((message, index) => {
           const isUser = message.role === "user";
+          if (isUser) {
+            return (
+              <div key={index} className="flex justify-end">
+                <div className="bg-primary text-primary-foreground max-w-[85%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap">
+                  {message.content}
+                </div>
+              </div>
+            );
+          }
+
+          // Assistant: reasoning colapsable + tool chips + texto. Mientras no haya
+          // texto y el turno siga streameando, mostramos el shimmer (muta a
+          // "Razonando…" si ya llegó reasoning).
+          const hasReasoning = !!message.reasoning;
+          const showShimmer = message.streaming && !message.content;
+
           return (
-            <div
-              key={index}
-              className={isUser ? "flex justify-end" : "flex justify-start"}
-            >
-              <div
-                className={
-                  isUser
-                    ? "bg-primary text-primary-foreground max-w-[85%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap"
-                    : "bg-neutral-100 dark:bg-neutral-900 max-w-[85%] rounded-lg px-3 py-2"
-                }
-              >
-                {isUser ? (
-                  message.content
+            <div key={index} className="flex justify-start">
+              <div className="bg-neutral-100 dark:bg-neutral-900 max-w-[85%] rounded-lg px-3 py-2">
+                {hasReasoning && (
+                  <ReasoningBlock
+                    reasoning={message.reasoning || ""}
+                    streaming={message.streaming}
+                  />
+                )}
+
+                {message.toolCalls && message.toolCalls.length > 0 && (
+                  <ToolCallChips toolCalls={message.toolCalls} />
+                )}
+
+                {showShimmer ? (
+                  <ChatShimmer label={hasReasoning ? "Razonando…" : undefined} />
                 ) : (
                   <AssistantMessage
                     content={message.content}
@@ -320,14 +490,6 @@ export default function ChatWindow() {
             </div>
           );
         })}
-
-        {loading && (
-          <div className="flex justify-start">
-            <div className="bg-neutral-100 dark:bg-neutral-900 rounded-lg px-3 py-2 text-sm opacity-70">
-              Pensando…
-            </div>
-          </div>
-        )}
       </div>
 
       <div className="shrink-0 border-t p-3">
