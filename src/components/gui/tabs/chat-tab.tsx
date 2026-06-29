@@ -331,7 +331,9 @@ export default function ChatWindow() {
       </div>
 
       <div className="shrink-0 border-t p-3">
-        <div className="flex items-end gap-2">
+        {/* items-stretch + h-auto en el botón → el botón iguala la altura del
+            textarea (2 filas) en vez de quedar más bajo y pegado al fondo. */}
+        <div className="flex items-stretch gap-2">
           <textarea
             value={input}
             onChange={(e) => setInput(e.currentTarget.value)}
@@ -340,7 +342,11 @@ export default function ChatWindow() {
             rows={2}
             className="border-input bg-background focus:border-secondary-foreground grow resize-none rounded-md border p-2 text-sm outline-hidden"
           />
-          <Button onClick={onSend} disabled={loading || !input.trim()}>
+          <Button
+            onClick={onSend}
+            disabled={loading || !input.trim()}
+            className="h-auto"
+          >
             <PaperPlaneTilt className="mr-2 h-4 w-4" />
             Enviar
           </Button>
