@@ -51,6 +51,39 @@ export function updateAgentFromLocalStorage(data: LocalAgentType) {
   mutate("/local-agent-setting", data);
 }
 
+// Merge puro (sin side-effects) de una config parcial sobre la actual. Si falta el
+// model y cambió el provider, cae al default de ESE provider. Usado por los dialogs
+// de provider/model para no perder los campos que no tocan. Testeable sin localStorage.
+export function mergeAgentConfig(
+  current: LocalAgentType | undefined,
+  partial: Partial<LocalAgentType>
+): LocalAgentType {
+  const provider = partial.provider ?? current?.provider ?? "anthropic";
+  const token = partial.token ?? current?.token ?? "";
+
+  // Si cambió el provider y no vino un model explícito, reseteamos al default de ESE
+  // provider — mantener el model del provider anterior no tendría sentido (p.ej. un
+  // "gpt-4o" colgando en una config de anthropic).
+  const providerChanged =
+    partial.provider != null && partial.provider !== current?.provider;
+  const model =
+    partial.model ??
+    (providerChanged ? DEFAULT_MODEL_BY_PROVIDER[provider] : current?.model) ??
+    DEFAULT_MODEL_BY_PROVIDER[provider];
+
+  return { provider, model, token };
+}
+
+// Aplica un update PARCIAL de la config (merge sobre lo guardado + persiste + mutate).
+// Lo usan model-picker (solo model) y provider-picker (provider + model default).
+export function patchAgentConfig(
+  partial: Partial<LocalAgentType>
+): LocalAgentType {
+  const merged = mergeAgentConfig(getAgentFromLocalStorage(), partial);
+  updateAgentFromLocalStorage(merged);
+  return merged;
+}
+
 export function useAvailableAIAgents(databaseDriver?: BaseDriver | null) {
   const { data: agentConfig } = useSWR(
     "/local-agent-setting",

@@ -23,6 +23,11 @@ class TestDriver extends CommonAgentDriverImplementation {
     return "";
   }
 
+  // Stub: estos tests no ejercitan el streaming (ver agent-stream.test.ts).
+  async queryStream(_messages: CommonAgentMessage[]): Promise<string> {
+    return "";
+  }
+
   publicConvertTableToDDLContent(
     schemaName: string | undefined,
     table: DatabaseTableSchema

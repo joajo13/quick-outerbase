@@ -4,7 +4,7 @@ import {
   DatabaseSchemas,
   DatabaseTableSchema,
 } from "../base-driver";
-import { AgentBaseDriver, AgentPromptOption } from "./base";
+import { AgentBaseDriver, AgentPromptOption, AgentStreamCallback } from "./base";
 
 export interface ChatHistory {
   id: string;
@@ -40,6 +40,18 @@ export default abstract class CommonAgentDriverImplementation extends AgentBaseD
   protected history: Record<string, ChatHistory> = {};
 
   abstract query(messages: CommonAgentMessage[]): Promise<string>;
+
+  /**
+   * Variante streaming de query(): pega al endpoint del provider con stream
+   * activado, parsea el SSE y emite eventos (text/reasoning) vía onEvent. Devuelve
+   * el TEXTO acumulado (la fuente de verdad para persistir el historial). Debe
+   * TIRAR si el stream no arranca (HTTP no-ok, red, CORS) para que chatStream caiga
+   * al fallback no-streaming. NO toca query()/run().
+   */
+  abstract queryStream(
+    messages: CommonAgentMessage[],
+    onEvent: AgentStreamCallback
+  ): Promise<string>;
 
   getSystemContent(option: AgentPromptOption): string {
     // DynamoDB no usa SQL relacional: se consulta con PartiQL. Le damos al LLM
@@ -140,15 +152,15 @@ ${dynamoClosing}`;
     throw new Error("We cannot generate good response");
   }
 
-  // Arma la sesión (system + schema + selección en el primer turno), agrega el
-  // mensaje del usuario, llama al proveedor y persiste el historial. Devuelve la
-  // respuesta CRUDA del assistant. Compartido por run() (Ctrl+B, text-to-SQL) y
-  // chat() (tab conversacional), para que ambos usen el mismo historial multi-turno.
-  private async runRaw(
+  // Recupera/crea la sesión y le agrega el turno del usuario (system + schema +
+  // selección SOLO en el primer turno). Compartido por runRaw() y chatStream()
+  // para que ambos armen el historial multi-turno EXACTAMENTE igual. Devuelve la
+  // sesión lista para mandar al proveedor (todavía sin la respuesta del assistant).
+  private prepareSession(
     message: string,
     previousId: string | undefined,
     option: AgentPromptOption
-  ): Promise<string> {
+  ): ChatHistory {
     const session = this.history[previousId ?? ""] ?? {
       id: previousId || generateId(),
       createdAt: Date.now(),
@@ -180,15 +192,30 @@ ${dynamoClosing}`;
       content: message,
     });
 
-    const result = await this.query(session.messages);
+    return session;
+  }
 
-    // Save the chat history
+  // Persiste la respuesta del assistant en el historial in-memory de la sesión.
+  private persistAssistant(session: ChatHistory, result: string) {
     session.messages.push({
       role: "assistant",
       content: result,
     });
 
     this.history[session.id] = session;
+  }
+
+  // Arma la sesión, llama al proveedor (no-streaming) y persiste el historial.
+  // Devuelve la respuesta CRUDA del assistant. Compartido por run() (Ctrl+B,
+  // text-to-SQL) y chat() (tab conversacional). Comportamiento idéntico al previo.
+  private async runRaw(
+    message: string,
+    previousId: string | undefined,
+    option: AgentPromptOption
+  ): Promise<string> {
+    const session = this.prepareSession(message, previousId, option);
+    const result = await this.query(session.messages);
+    this.persistAssistant(session, result);
     return result;
   }
 
@@ -215,6 +242,87 @@ ${dynamoClosing}`;
       ...option,
       conversational: true,
     });
+  }
+
+  // Variante STREAMING de chat() para el chat tab. Arma la misma sesión multi-turno
+  // (conversacional) que chat(), pero delega en queryStream() para emitir el texto
+  // token a token vía onEvent. Acumula el texto y lo persiste igual que chat().
+  //
+  // Hard fallback (centralizado acá, no duplicado en cada provider): si queryStream
+  // tira SIN haber emitido TEXTO (caso típico: HTTP no-ok, CORS, red, un modelo que
+  // rechaza el flag de reasoning, o un error SSE que llega DESPUÉS del reasoning pero
+  // ANTES del texto), caemos al query() no-streaming y emitimos un único evento "text"
+  // con toda la respuesta. La decisión gatea por TEXTO real mostrado al usuario, NO
+  // por reasoning: el reasoning va a un bloque aparte y no es "la respuesta", así que
+  // si solo hubo reasoning todavía es seguro (y deseable) reintentar por el camino
+  // no-streaming. Si ya salió texto y después explota, NO rehacemos (duplicaría):
+  // cerramos con un "error". Nunca tira: siempre resuelve emitiendo "done", para que
+  // la UI event-driven cierre el turno.
+  async chatStream(
+    message: string,
+    previousId: string | undefined,
+    option: AgentPromptOption,
+    onEvent: AgentStreamCallback
+  ): Promise<string> {
+    const session = this.prepareSession(message, previousId, {
+      ...option,
+      conversational: true,
+    });
+
+    // Acumulamos el texto VISIBLE para: (a) persistir el historial y (b) decidir si el
+    // hard fallback es seguro. El reasoning NO se acumula acá a propósito (no es la
+    // respuesta y no debe inhibir el fallback).
+    let text = "";
+
+    const wrapped: AgentStreamCallback = (event) => {
+      if (event.type === "text") {
+        text += event.delta;
+      }
+      onEvent(event);
+    };
+
+    try {
+      const finalText = await this.queryStream(session.messages, wrapped);
+      // queryStream devuelve el texto acumulado (fuente de verdad). Si por algún
+      // motivo no acumulamos vía eventos, usamos su retorno.
+      if (finalText) text = finalText;
+      this.persistAssistant(session, text);
+      onEvent({ type: "done" });
+      return text;
+    } catch (streamError) {
+      if (text) {
+        // Ya mostramos TEXTO real: no podemos rehacer la respuesta sin duplicarla.
+        onEvent({
+          type: "error",
+          message:
+            streamError instanceof Error
+              ? streamError.message
+              : "El stream se interrumpió",
+        });
+        this.persistAssistant(session, text);
+        onEvent({ type: "done" });
+        return text;
+      }
+
+      // No salió texto (a lo sumo reasoning) → fallback duro al camino no-streaming.
+      try {
+        text = await this.query(session.messages);
+        this.persistAssistant(session, text);
+        onEvent({ type: "text", delta: text });
+        onEvent({ type: "done" });
+        return text;
+      } catch (fallbackError) {
+        onEvent({
+          type: "error",
+          message:
+            fallbackError instanceof Error
+              ? fallbackError.message
+              : "No se pudo generar la respuesta",
+        });
+        onEvent({ type: "done" });
+        return "";
+      }
+    }
   }
 
   constructor(protected driver: BaseDriver) {
