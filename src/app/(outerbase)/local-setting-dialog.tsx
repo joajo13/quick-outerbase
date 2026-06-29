@@ -54,11 +54,12 @@ export const localSettingDialog = createDialog(({ close }) => {
   return (
     <>
       <DialogHeader>
-        <DialogTitle>AI Assistant Setting</DialogTitle>
+        <DialogTitle>API Key</DialogTitle>
         <DialogDescription>
           Elegí un proveedor y pegá tu API key para habilitar el asistente
           (text-to-SQL y explicaciones). La key se guarda solo en localStorage de
-          tu navegador. No la guardamos en ningún servidor ni se loguea.
+          tu navegador. No la guardamos en ningún servidor ni se loguea. El modelo lo
+          podés elegir desde la barra del chat; acá queda como override manual opcional.
         </DialogDescription>
       </DialogHeader>
 
@@ -79,20 +80,20 @@ export const localSettingDialog = createDialog(({ close }) => {
         </div>
 
         <LabelInput
-          label="Model"
-          placeholder="Model"
-          size="lg"
-          value={model}
-          onValueChange={setModel}
-        />
-
-        <LabelInput
           type="password"
           label="API Key"
           placeholder="API Key"
           size="lg"
           value={token}
           onValueChange={setToken}
+        />
+
+        <LabelInput
+          label="Modelo (override opcional)"
+          placeholder="Dejalo vacío para usar el default del proveedor"
+          size="lg"
+          value={model}
+          onValueChange={setModel}
         />
       </div>
 
