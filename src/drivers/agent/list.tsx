@@ -50,7 +50,7 @@ function buildProviderDriver(
       return new GeminiDriver(databaseDriver, config.token, config.model);
     case "openai":
     default:
-      return new ChatGPTDriver(databaseDriver, config.token);
+      return new ChatGPTDriver(databaseDriver, config.token, config.model);
   }
 }
 

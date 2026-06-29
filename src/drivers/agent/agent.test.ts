@@ -1,6 +1,7 @@
 import { BaseDriver, DatabaseTableSchema } from "../base-driver";
 import CommonAgentDriverImplementation, { CommonAgentMessage } from "./common";
 import AgentDriverList from "./list";
+import { ChatGPTDriver } from "./chatgpt";
 
 // Driver de DB falso: los agentes solo usan getFlags() (dialect/defaultSchema) y
 // escapeId() al armar el DDL/system prompt. escapeId envuelve en comillas dobles
@@ -361,5 +362,73 @@ describe("AgentDriverList.resolveDriver — resolución robusta de modelo", () =
     list.seed({}, "llama-3.3-70b");
     expect(list.pick("x")).toBeUndefined();
     expect(list.hasUsableModel()).toBe(false);
+  });
+});
+
+describe("ChatGPTDriver.query — modelo configurado + manejo de errores", () => {
+  const mockFetch = (payload: unknown) =>
+    jest.fn().mockResolvedValue({
+      json: async () => payload,
+    } as Response);
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  test("manda el MODELO CONFIGURADO (no el hardcodeado gpt-4o-mini)", async () => {
+    const fetchSpy = mockFetch({
+      choices: [{ message: { role: "assistant", content: "SELECT 1" } }],
+    });
+    global.fetch = fetchSpy as unknown as typeof fetch;
+
+    const driver = new ChatGPTDriver(
+      fakeDriver(),
+      "sk-test",
+      "gpt-5.1-2025-11-13"
+    );
+    await driver.query([{ role: "user", content: "hi" }]);
+
+    const body = JSON.parse(
+      (fetchSpy.mock.calls[0][1] as RequestInit).body as string
+    );
+    expect(body.model).toBe("gpt-5.1-2025-11-13");
+    expect(body.model).not.toBe("gpt-4o-mini");
+  });
+
+  test("respuesta de error de OpenAI ({error} sin choices) → Error legible, NO 'reading 0'", async () => {
+    global.fetch = mockFetch({
+      error: { message: "The model `gpt-4o-mini` does not exist." },
+    }) as unknown as typeof fetch;
+
+    const driver = new ChatGPTDriver(fakeDriver(), "sk-test", "gpt-4o-mini");
+    await expect(driver.query([{ role: "user", content: "hi" }])).rejects.toThrow(
+      "The model `gpt-4o-mini` does not exist."
+    );
+    // El bug original: "Cannot read properties of undefined (reading '0')".
+    await expect(
+      driver.query([{ role: "user", content: "hi" }])
+    ).rejects.not.toThrow(/reading '0'/);
+  });
+
+  test("respuesta sin choices ni error → Error defensivo (no crashea con choices[0])", async () => {
+    global.fetch = mockFetch({}) as unknown as typeof fetch;
+
+    const driver = new ChatGPTDriver(fakeDriver(), "sk-test", "gpt-4o-mini");
+    await expect(
+      driver.query([{ role: "user", content: "hi" }])
+    ).rejects.toThrow(/sin choices/);
+  });
+
+  test("respuesta exitosa → devuelve el content del primer choice", async () => {
+    global.fetch = mockFetch({
+      choices: [
+        { message: { role: "assistant", content: "SELECT count(*) FROM books" } },
+      ],
+    }) as unknown as typeof fetch;
+
+    const driver = new ChatGPTDriver(fakeDriver(), "sk-test", "gpt-4o-mini");
+    await expect(driver.query([{ role: "user", content: "hi" }])).resolves.toBe(
+      "SELECT count(*) FROM books"
+    );
   });
 });
