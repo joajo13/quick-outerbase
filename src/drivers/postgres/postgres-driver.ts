@@ -93,12 +93,11 @@ interface PostgresConstraintRow {
 }
 
 export default class PostgresLikeDriver extends CommonSQLImplement {
-  // _schema: se retiene por compatibilidad de API (env-driver lo sigue pasando
-  // desde el ?schema= de Prisma), pero el driver NO lo usa: ni filtra la
-  // introspección (schemas() lista SIEMPRE todos los schemas no-sistema) ni define
-  // el schema inicial. El schema inicial seleccionado sale del search_path de la
-  // conexión (proxy/db/route.ts setea `-c search_path=` desde ?schema=) que la UI
-  // lee de vuelta con getCurrentSchema(). Dejarlo no rompe a los callers existentes.
+  // _schema: viene del ?schema=X (Prisma) de la connection URL. Cuando está
+  // seteado, schemas() ACOTA la introspección a ese schema (la UI lista solo ese);
+  // sin él, schemas() lista todos los schemas no-sistema. El schema inicial
+  // seleccionado lo define igual el search_path de la conexión (proxy/db/route.ts
+  // setea `-c search_path=` desde ?schema=), leído con getCurrentSchema().
   constructor(
     protected _db: QueryableBaseDriver,
     protected _schema?: string
@@ -165,9 +164,9 @@ export default class PostgresLikeDriver extends CommonSQLImplement {
   }
 
   async schemas(): Promise<DatabaseSchemas> {
-    // Listamos SIEMPRE todos los schemas no-sistema (y todas sus tablas/columnas/
-    // constraints). _schema NO filtra acá (ni en ningún lado del driver). Así el
-    // árbol y el ERD pueden navegar la base entera, no un solo schema.
+    // Introspectamos todos los schemas no-sistema (con tablas/columnas/constraints).
+    // Si la URL trae ?schema= (this._schema), acotamos el resultado a ese schema al
+    // final del método; sin él, devolvemos la base entera (tree + ERD navegables).
     const schemaSql = `SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ('information_schema', 'pg_catalog', 'pg_toast')`;
     const tableSql =
       "SELECT *, pg_total_relation_size(quote_ident(table_schema) || '.' || quote_ident(table_name)) AS table_size FROM information_schema.tables WHERE table_schema NOT IN ('information_schema', 'pg_catalog', 'pg_toast')";
@@ -377,6 +376,15 @@ WHERE a.attnum > 0 AND NOT a.attisdropped AND n.nspname NOT IN ('information_sch
           cc.table_schema + "." + cc.table_name + "." + cc.column_name
         ];
       if (col) col.comment = cc.comment;
+    }
+
+    // Si la URL especificó un schema (Prisma ?schema=X), acotamos la lista a ESE
+    // schema solamente (árbol, ERD y autocomplete quedan scopeados a él). Sin
+    // ?schema= devolvemos TODOS los schemas no-sistema (comportamiento default).
+    // `_schema` viene verbatim de la URL; si no matchea ningún schema real
+    // devolvemos ese único nodo vacío para reflejar la intención de la URL.
+    if (this._schema) {
+      return { [this._schema]: schemas[this._schema] ?? [] };
     }
 
     return schemas;
