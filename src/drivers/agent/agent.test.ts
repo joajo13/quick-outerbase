@@ -165,6 +165,98 @@ describe("convertTableToDDLContent — DDL enriquecido", () => {
   });
 });
 
+describe("convertTableToDDLContent — FKs con introspección incompleta (cross-schema)", () => {
+  // escapeId REAL de Postgres: hace id.replace(...). Si le llega null tira
+  // "Cannot read properties of null (reading 'replace')" — exactamente el crash
+  // del bug. Lo replicamos acá para que el test falle ANTES del fix.
+  function strictPgDriver(): BaseDriver {
+    return {
+      getFlags: () => ({ dialect: "postgres", defaultSchema: "public" }),
+      escapeId: (id: string) => `"${id.replace(/"/g, '""')}"`,
+    } as unknown as BaseDriver;
+  }
+
+  // FK cross-schema: information_schema.constraint_column_usage no matchea entre
+  // schemas, así que schemas() arma foreignTableName/foreignColumns en null.
+  function tableWithBrokenFk(): DatabaseTableSchema {
+    return {
+      schemaName: "analytics",
+      tableName: "events",
+      autoIncrement: false,
+      pk: ["id"],
+      type: "table",
+      columns: [
+        { name: "id", type: "integer" },
+        { name: "book_id", type: "integer" },
+      ],
+      constraints: [
+        {
+          name: "events_book_id_fkey",
+          foreignKey: {
+            foreignTableName: undefined,
+            foreignColumns: [null as unknown as string],
+            columns: ["book_id"],
+          },
+        },
+      ],
+      indexes: [],
+    };
+  }
+
+  test("NO crashea con un FK cross-schema (foreignColumns/foreignTableName en null)", () => {
+    expect(() =>
+      new TestDriver(strictPgDriver()).publicConvertTableToDDLContent(
+        "analytics",
+        tableWithBrokenFk()
+      )
+    ).not.toThrow();
+  });
+
+  test("omite el FK incompleto en vez de emitir REFERENCES \"\" ()", () => {
+    const out = new TestDriver(strictPgDriver()).publicConvertTableToDDLContent(
+      "analytics",
+      tableWithBrokenFk()
+    );
+    // El CREATE TABLE se genera igual...
+    expect(out).toContain("CREATE TABLE");
+    expect(out).toContain('"book_id"');
+    // ...pero sin un FOREIGN KEY malformado apuntando a la nada.
+    expect(out).not.toContain('REFERENCES ""');
+    expect(out).not.toMatch(/REFERENCES\s+""\s*\(\)/);
+  });
+
+  test("un FK completo en el mismo schema sí se emite (no rompemos el caso bueno)", () => {
+    const table: DatabaseTableSchema = {
+      schemaName: "public",
+      tableName: "books",
+      autoIncrement: false,
+      pk: ["id"],
+      type: "table",
+      columns: [
+        { name: "id", type: "integer" },
+        { name: "author_id", type: "integer" },
+      ],
+      constraints: [
+        {
+          name: "books_author_id_fkey",
+          foreignKey: {
+            foreignTableName: "authors",
+            foreignColumns: ["id"],
+            columns: ["author_id"],
+          },
+        },
+      ],
+      indexes: [],
+    };
+    const out = new TestDriver(strictPgDriver()).publicConvertTableToDDLContent(
+      undefined,
+      table
+    );
+    expect(out).toContain("FOREIGN KEY");
+    expect(out).toMatch(/REFERENCES\s+"authors"\s*\("id"\)/);
+  });
+});
+
 describe("getSystemContent — contexto enriquecido (no dynamodb)", () => {
   const agent = (dialect = "postgres", defaultSchema = "public") =>
     new TestDriver(fakeDriver(dialect, defaultSchema));

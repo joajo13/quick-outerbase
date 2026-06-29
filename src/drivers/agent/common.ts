@@ -283,33 +283,48 @@ ${dynamoClosing}`;
     // FKs: a nivel columna (constraint.foreignKey) y a nivel tabla
     // (table.constraints[].foreignKey). Antes se computaban y se tiraban (bug):
     // ahora SÍ se appendean al cuerpo del CREATE TABLE.
+    // La introspección de FKs puede venir INCOMPLETA: p.ej. los FK cross-schema
+    // de Postgres devuelven la tabla/columnas referenciadas en null desde
+    // information_schema (constraint_column_usage no matchea entre schemas).
+    // Filtramos nombres null/vacíos y omitimos el FK si le falta la tabla destino
+    // o las columnas, en vez de pasarle null a escapeId (que hace id.replace y
+    // tiraría "Cannot read properties of null (reading 'replace')").
     const foreignKeyPart: string[] = [];
     for (const column of table.columns) {
-      if (column.constraint?.foreignKey) {
-        foreignKeyPart.push(
-          [
-            "FOREIGN KEY",
-            `(${escapeId(column.name)})`,
-            "REFERENCES",
-            escapeId(column.constraint.foreignKey.foreignTableName ?? ""),
-            `(${(column.constraint?.foreignKey?.foreignColumns ?? []).map(escapeId).join(", ")})`,
-          ].join(" ")
-        );
+      const fk = column.constraint?.foreignKey;
+      if (!fk) continue;
+      const foreignColumns = (fk.foreignColumns ?? []).filter(Boolean);
+      if (!column.name || !fk.foreignTableName || foreignColumns.length === 0) {
+        continue;
       }
+      foreignKeyPart.push(
+        [
+          "FOREIGN KEY",
+          `(${escapeId(column.name)})`,
+          "REFERENCES",
+          escapeId(fk.foreignTableName),
+          `(${foreignColumns.map(escapeId).join(", ")})`,
+        ].join(" ")
+      );
     }
 
     for (const constraint of table.constraints ?? []) {
-      if (constraint.foreignKey) {
-        foreignKeyPart.push(
-          [
-            "FOREIGN KEY",
-            `(${(constraint.foreignKey.columns ?? []).map(escapeId).join(", ")})`,
-            "REFERENCES",
-            escapeId(constraint.foreignKey.foreignTableName ?? ""),
-            `(${(constraint.foreignKey.foreignColumns ?? []).map(escapeId).join(", ")})`,
-          ].join(" ")
-        );
+      const fk = constraint.foreignKey;
+      if (!fk) continue;
+      const columns = (fk.columns ?? []).filter(Boolean);
+      const foreignColumns = (fk.foreignColumns ?? []).filter(Boolean);
+      if (!fk.foreignTableName || columns.length === 0 || foreignColumns.length === 0) {
+        continue;
       }
+      foreignKeyPart.push(
+        [
+          "FOREIGN KEY",
+          `(${columns.map(escapeId).join(", ")})`,
+          "REFERENCES",
+          escapeId(fk.foreignTableName),
+          `(${foreignColumns.map(escapeId).join(", ")})`,
+        ].join(" ")
+      );
     }
 
     const foreignKeyClause =
