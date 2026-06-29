@@ -10,6 +10,13 @@ updates:
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
+    # @libsql/client está pineado a propósito vía `overrides` en package.json
+    # (^0.5.3) por el empaquetado de binarios nativos que el release copia a mano
+    # (ver release-bundles.yml). Dependabot no puede subirlo sin chocar con ese
+    # override (dependency_file_not_resolvable), así que lo ignoramos acá. Subirlo
+    # de verdad (0.5 → 0.17) es una tarea aparte que requiere testear el bundle.
+    ignore:
+      - dependency-name: "@libsql/client"
     # Agrupamos los patches/minors para no inundar de PRs.
     groups:
       minor-and-patch:
