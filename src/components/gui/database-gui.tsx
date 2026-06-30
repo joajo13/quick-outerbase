@@ -217,6 +217,7 @@ export default function DatabaseGui() {
         <ResizableHandle withHandle className="bg-transparent" />
         <ResizablePanel defaultSize={100 - defaultWidthPercentage}>
           <WindowTabs
+            enableSplit
             menu={tabSideMenu}
             tabs={tabs}
             selected={selectedTabIndex}
