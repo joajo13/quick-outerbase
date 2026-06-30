@@ -1,7 +1,7 @@
 # Chat agéntico con ejecución de queries — Design
 
 **Fecha:** 2026-06-30
-**Estado:** Aprobado (pendiente review del spec)
+**Estado:** Implementado (typecheck + 173 tests + lint OK; pendiente e2e manual con API key + base con datos)
 
 ## Objetivo
 
