@@ -8,6 +8,8 @@ import {
   closePane,
   syncWithTabs,
   evenSizes,
+  MIN_PANE_PERCENT,
+  resizePanes,
 } from "./split-tabs-state";
 
 describe("evenSizes", () => {
@@ -144,5 +146,30 @@ describe("syncWithTabs", () => {
   test("si nada cambió devuelve el mismo objeto", () => {
     const s = { panes: [{ tabKey: "a" }, { tabKey: "b" }], focusedPaneIndex: 0, sizes: [50, 50] };
     expect(syncWithTabs(s, ["a", "b"])).toBe(s);
+  });
+});
+
+describe("resizePanes", () => {
+  test("mueve ancho entre dos paneles vecinos", () => {
+    expect(resizePanes([50, 50], 0, 10)).toEqual([60, 40]);
+    expect(resizePanes([50, 50], 0, -10)).toEqual([40, 60]);
+  });
+
+  test("no deja a un panel por debajo del mínimo", () => {
+    const r = resizePanes([50, 50], 0, 100);
+    expect(r[0]).toBe(100 - MIN_PANE_PERCENT);
+    expect(r[1]).toBe(MIN_PANE_PERCENT);
+  });
+
+  test("no toca paneles que no son vecinos del divisor", () => {
+    const r = resizePanes([33, 34, 33], 1, 10);
+    expect(r[0]).toBe(33);
+    expect(r[1]).toBe(44);
+    expect(r[2]).toBe(23);
+  });
+
+  test("dividerIndex inválido devuelve los mismos sizes", () => {
+    const sizes = [50, 50];
+    expect(resizePanes(sizes, 5, 10)).toBe(sizes);
   });
 });

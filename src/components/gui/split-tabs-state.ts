@@ -101,3 +101,28 @@ export function syncWithTabs(
   if (!changed) return state;
   return { ...state, panes };
 }
+
+export const MIN_PANE_PERCENT = 15;
+
+// Mueve el divisor entre el panel dividerIndex y dividerIndex+1.
+// deltaPercent > 0 agranda el panel izquierdo. Respeta MIN_PANE_PERCENT en ambos.
+export function resizePanes(
+  sizes: number[],
+  dividerIndex: number,
+  deltaPercent: number
+): number[] {
+  if (dividerIndex < 0 || dividerIndex >= sizes.length - 1) return sizes;
+
+  const left = sizes[dividerIndex];
+  const right = sizes[dividerIndex + 1];
+  const pair = left + right;
+
+  let newLeft = left + deltaPercent;
+  newLeft = Math.max(MIN_PANE_PERCENT, Math.min(pair - MIN_PANE_PERCENT, newLeft));
+  const newRight = pair - newLeft;
+
+  const next = [...sizes];
+  next[dividerIndex] = newLeft;
+  next[dividerIndex + 1] = newRight;
+  return next;
+}
