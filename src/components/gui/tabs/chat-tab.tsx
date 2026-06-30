@@ -601,7 +601,11 @@ export default function ChatWindow() {
 
   // Nuevo chat: limpia los mensajes y rota el sessionId → el driver arranca un
   // historial in-memory fresco (re-manda system + schema en el próximo turno).
+  // Resolvemos como "discard" cualquier tool call en espera para no dejar el loop
+  // (ni el spinner de loading) colgado.
   const onNewChat = useCallback(() => {
+    pendingResolvers.current.forEach((resolve) => resolve("discard"));
+    pendingResolvers.current.clear();
     setMessages([]);
     setInput("");
     sessionId.current = generateId();
