@@ -1,7 +1,7 @@
 # Chat agéntico con ejecución de queries — Design
 
 **Fecha:** 2026-06-30
-**Estado:** Implementado (typecheck + 173 tests + lint OK; pendiente e2e manual con API key + base con datos)
+**Estado:** Verificado e2e — typecheck + 173 tests + lint OK, y prueba en vivo con OpenAI gpt-5.1 (Responses API) sobre `mi-prueba.db`: gate read (auto-run on/off), write frena con auto-run on, Descartar no toca la DB, multi-step, mini-grilla + respuesta interpretada.
 
 ## Objetivo
 
