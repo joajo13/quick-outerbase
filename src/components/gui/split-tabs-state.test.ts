@@ -85,6 +85,11 @@ describe("setPaneTab", () => {
     const s = { panes: [{ tabKey: "a" }, { tabKey: null }], focusedPaneIndex: 1, sizes: [50, 50] };
     expect(setPaneTab(s, 1, "b").panes).toEqual([{ tabKey: "a" }, { tabKey: "b" }]);
   });
+
+  test("enfoca el panel al asignarle una tab (picker open existing)", () => {
+    const s = { panes: [{ tabKey: "a" }, { tabKey: null }], focusedPaneIndex: 0, sizes: [50, 50] };
+    expect(setPaneTab(s, 1, "b").focusedPaneIndex).toBe(1);
+  });
 });
 
 describe("focusPane", () => {
@@ -118,6 +123,14 @@ describe("closePane", () => {
     const r = closePane(s, 0);
     expect(r.panes).toEqual([{ tabKey: "b" }, { tabKey: "c" }]);
     expect(r.focusedPaneIndex).toBe(1);
+  });
+
+  test("al cerrar el panel enfocado, el foco cae en un panel valido", () => {
+    const s = { panes: [{ tabKey: "a" }, { tabKey: "b" }, { tabKey: "c" }], focusedPaneIndex: 0, sizes: [33, 33, 34] };
+    const r = closePane(s, 0);
+    expect(r.panes).toEqual([{ tabKey: "b" }, { tabKey: "c" }]);
+    expect(r.focusedPaneIndex).toBeGreaterThanOrEqual(0);
+    expect(r.focusedPaneIndex).toBeLessThan(r.panes.length);
   });
 });
 

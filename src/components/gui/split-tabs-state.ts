@@ -76,6 +76,7 @@ export function closePane(state: SplitState, paneIndex: number): SplitState {
 
   const panes = state.panes.filter((_, i) => i !== paneIndex);
   let focusedPaneIndex = state.focusedPaneIndex;
+  // Si se cierra un panel en/antes del enfocado, corré el foco un lugar atrás.
   if (focusedPaneIndex >= paneIndex) {
     focusedPaneIndex = Math.max(0, focusedPaneIndex - 1);
   }
