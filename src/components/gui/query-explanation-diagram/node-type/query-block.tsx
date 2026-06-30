@@ -34,7 +34,7 @@ export function QueryBlock(props: ExplainNodeProps) {
             </div>
           </div>
           <div className="flex flex-row items-center">
-            <div className="max-w-[200px] p-2 bg-gray-300 text-gray-900 border-gray-900 text-[9pt] border-b rounded-md py-4">
+            <div className="max-w-[200px] p-2 bg-gray-300 text-gray-900 border-gray-900 text-[9pt] border-b rounded-panel py-4">
               <div>
                 <small>
                   {props.id.split("-")?.[0] || null}{" "}

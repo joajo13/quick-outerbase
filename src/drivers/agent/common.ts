@@ -4,18 +4,40 @@ import {
   DatabaseSchemas,
   DatabaseTableSchema,
 } from "../base-driver";
-import { AgentBaseDriver, AgentPromptOption, AgentStreamCallback } from "./base";
+import {
+  AgentBaseDriver,
+  AgentPromptOption,
+  AgentStreamCallback,
+  AgentToolCall,
+  AgentToolExecutor,
+} from "./base";
 
 export interface ChatHistory {
   id: string;
   createdAt: number;
-  messages: { role: string; content: string }[];
+  messages: CommonAgentMessage[];
 }
 
 export interface CommonAgentMessage {
-  role: string;
+  role: string; // "system" | "user" | "assistant" | "tool"
   content: string;
+  // Tool calls que el assistant pidió en este turno. Cada provider las traduce a
+  // su dialecto (Anthropic tool_use, OpenAI tool_calls, Gemini functionCall).
+  // Solo en turnos role:"assistant".
+  toolCalls?: AgentToolCall[];
+  // A qué tool call responde este turno. Solo en turnos role:"tool".
+  toolCallId?: string;
 }
+
+// Resultado de un turno de streaming: texto acumulado + tools que pidió el modelo.
+// toolCalls vacío = el modelo terminó sin pedir tools.
+export interface QueryStreamResult {
+  text: string;
+  toolCalls: AgentToolCall[];
+}
+
+// Tope de vueltas del loop de tool calling (corta-loops-infinitos).
+export const MAX_TOOL_ITERATIONS = 8;
 
 // Reglas de PartiQL que el agente le enseña al LLM para que genere statements
 // EJECUTABLES contra DynamoDB (ExecuteStatement). Verificadas contra la doc de
@@ -43,15 +65,19 @@ export default abstract class CommonAgentDriverImplementation extends AgentBaseD
 
   /**
    * Variante streaming de query(): pega al endpoint del provider con stream
-   * activado, parsea el SSE y emite eventos (text/reasoning) vía onEvent. Devuelve
-   * el TEXTO acumulado (la fuente de verdad para persistir el historial). Debe
-   * TIRAR si el stream no arranca (HTTP no-ok, red, CORS) para que chatStream caiga
-   * al fallback no-streaming. NO toca query()/run().
+   * activado, parsea el SSE y emite eventos (text/reasoning/tool_call) vía onEvent.
+   * Devuelve { text, toolCalls }: el texto acumulado (fuente de verdad para persistir)
+   * y las tools que pidió el modelo (vacío si terminó sin pedir ninguna). Debe TIRAR
+   * si el stream no arranca (HTTP no-ok, red, CORS) para que chatStream caiga al
+   * fallback no-streaming. NO toca query()/run().
+   *
+   * @param enableTools si es true, manda la definición de run_query y parsea tool_use.
    */
   abstract queryStream(
     messages: CommonAgentMessage[],
-    onEvent: AgentStreamCallback
-  ): Promise<string>;
+    onEvent: AgentStreamCallback,
+    enableTools: boolean
+  ): Promise<QueryStreamResult>;
 
   getSystemContent(option: AgentPromptOption): string {
     // DynamoDB no usa SQL relacional: se consulta con PartiQL. Le damos al LLM
@@ -64,7 +90,9 @@ export default abstract class CommonAgentDriverImplementation extends AgentBaseD
         : "You are an expert in Amazon DynamoDB PartiQL. The user is using DynamoDB, which is queried with PartiQL (NOT standard relational SQL).";
 
       const dynamoClosing = option.conversational
-        ? "Answer conversationally: briefly explain your reasoning, and put any PartiQL you generate inside ```sql fenced code blocks. Do not execute anything."
+        ? option.agentic
+          ? "Answer conversationally. You have a tool `run_query(sql, reason?)` that executes ONE PartiQL statement and returns the result; use it to answer questions about the data instead of guessing. After seeing the result, answer in prose interpreting it. You may also show PartiQL inside ```sql fenced code blocks."
+          : "Answer conversationally: briefly explain your reasoning, and put any PartiQL you generate inside ```sql fenced code blocks. Do not execute anything."
         : "Only return a single PartiQL statement, wrapped in a ```sql code block.";
 
       return `${intro}
@@ -99,8 +127,13 @@ ${dynamoClosing}`;
       "Only use tables and columns that appear in the provided schema. Do NOT invent tables or columns that are not present; if something is not in the schema, say so rather than guessing."
     );
 
-    if (option.conversational) {
-      // Chat tab: conversacional. Permite prosa + SQL en bloques ```sql.
+    if (option.conversational && option.agentic) {
+      // Chat tab agéntico: el modelo puede ejecutar queries con run_query.
+      guidance.push(
+        "You have a tool `run_query(sql, reason?)` that executes ONE SQL statement and returns the result (columns, rows, stats). Use it to answer questions about the data instead of guessing. Prefer aggregations (GROUP BY/LIMIT) over fetching large datasets. After seeing the result, answer in prose interpreting it. You can also show SQL inside ```sql fenced code blocks."
+      );
+    } else if (option.conversational) {
+      // Chat tab conversacional sin tools: prosa + SQL en bloques ```sql.
       guidance.push(
         "Answer conversationally: briefly explain your reasoning and put any SQL you generate inside ```sql fenced code blocks. Do not execute anything."
       );
@@ -262,67 +295,116 @@ ${dynamoClosing}`;
     message: string,
     previousId: string | undefined,
     option: AgentPromptOption,
-    onEvent: AgentStreamCallback
+    onEvent: AgentStreamCallback,
+    executeTool?: AgentToolExecutor
   ): Promise<string> {
+    const enableTools = !!executeTool;
     const session = this.prepareSession(message, previousId, {
       ...option,
       conversational: true,
+      agentic: enableTools,
     });
 
-    // Acumulamos el texto VISIBLE para: (a) persistir el historial y (b) decidir si el
-    // hard fallback es seguro. El reasoning NO se acumula acá a propósito (no es la
-    // respuesta y no debe inhibir el fallback).
-    let text = "";
+    let lastText = "";
 
-    const wrapped: AgentStreamCallback = (event) => {
-      if (event.type === "text") {
-        text += event.delta;
-      }
-      onEvent(event);
-    };
+    // Loop de tool calling: cada vuelta corre un turno de streaming; si el modelo
+    // pidió tools, las ejecutamos vía executeTool, reinyectamos el resultado y
+    // volvemos. Corta cuando el modelo responde sin tools, el usuario cancela, o se
+    // alcanza el tope de iteraciones. El hard-fallback no-streaming vive adentro del
+    // turno (solo aplica si el stream ni arrancó y todavía no salió texto).
+    for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
+      // Acumulamos el texto VISIBLE de ESTE turno para persistir y para decidir si el
+      // hard fallback es seguro. El reasoning NO se acumula (no es "la respuesta").
+      let turnText = "";
+      const wrapped: AgentStreamCallback = (event) => {
+        if (event.type === "text") turnText += event.delta;
+        onEvent(event);
+      };
 
-    try {
-      const finalText = await this.queryStream(session.messages, wrapped);
-      // queryStream devuelve el texto acumulado (fuente de verdad). Si por algún
-      // motivo no acumulamos vía eventos, usamos su retorno.
-      if (finalText) text = finalText;
-      this.persistAssistant(session, text);
-      onEvent({ type: "done" });
-      return text;
-    } catch (streamError) {
-      if (text) {
-        // Ya mostramos TEXTO real: no podemos rehacer la respuesta sin duplicarla.
-        onEvent({
-          type: "error",
-          message:
-            streamError instanceof Error
-              ? streamError.message
-              : "El stream se interrumpió",
-        });
-        this.persistAssistant(session, text);
-        onEvent({ type: "done" });
-        return text;
-      }
-
-      // No salió texto (a lo sumo reasoning) → fallback duro al camino no-streaming.
+      let result: QueryStreamResult;
       try {
-        text = await this.query(session.messages);
-        this.persistAssistant(session, text);
-        onEvent({ type: "text", delta: text });
-        onEvent({ type: "done" });
-        return text;
-      } catch (fallbackError) {
-        onEvent({
-          type: "error",
-          message:
-            fallbackError instanceof Error
-              ? fallbackError.message
-              : "No se pudo generar la respuesta",
-        });
-        onEvent({ type: "done" });
-        return "";
+        result = await this.queryStream(session.messages, wrapped, enableTools);
+        if (result.text) turnText = result.text;
+      } catch (streamError) {
+        if (turnText) {
+          // Ya mostramos TEXTO real: no podemos rehacer la respuesta sin duplicarla.
+          onEvent({
+            type: "error",
+            message:
+              streamError instanceof Error
+                ? streamError.message
+                : "El stream se interrumpió",
+          });
+          this.persistAssistant(session, turnText);
+          onEvent({ type: "done" });
+          return turnText;
+        }
+
+        // No salió texto (a lo sumo reasoning) → fallback duro al no-streaming. El
+        // no-streaming NO soporta tools: cierra el turno con texto plano.
+        try {
+          const fallbackText = await this.query(session.messages);
+          this.persistAssistant(session, fallbackText);
+          onEvent({ type: "text", delta: fallbackText });
+          onEvent({ type: "done" });
+          return fallbackText;
+        } catch (fallbackError) {
+          onEvent({
+            type: "error",
+            message:
+              fallbackError instanceof Error
+                ? fallbackError.message
+                : "No se pudo generar la respuesta",
+          });
+          onEvent({ type: "done" });
+          return "";
+        }
       }
+
+      lastText = turnText || lastText;
+
+      // El modelo no pidió tools (o no hay executor): terminó el turno.
+      if (!executeTool || result.toolCalls.length === 0) {
+        this.persistAssistant(session, turnText);
+        onEvent({ type: "done" });
+        return turnText;
+      }
+
+      // Pidió tools: persistir el turno assistant CON los tool_use y ejecutarlas.
+      session.messages.push({
+        role: "assistant",
+        content: turnText,
+        toolCalls: result.toolCalls,
+      });
+      this.history[session.id] = session;
+
+      let cancelled = false;
+      for (const toolCall of result.toolCalls) {
+        const toolResult = await executeTool(toolCall);
+        session.messages.push({
+          role: "tool",
+          content: toolResult.content,
+          toolCallId: toolCall.id,
+        });
+        if (toolResult.cancelled) cancelled = true;
+      }
+      this.history[session.id] = session;
+
+      if (cancelled) {
+        // El usuario descartó: el modelo no sigue. Cerramos con lo que haya.
+        onEvent({ type: "done" });
+        return lastText;
+      }
+      // Sigue el loop: otra vuelta de queryStream con el tool_result en el historial.
     }
+
+    // Se alcanzó el tope de iteraciones del agente.
+    onEvent({
+      type: "error",
+      message: "Se alcanzó el máximo de pasos del agente.",
+    });
+    onEvent({ type: "done" });
+    return lastText;
   }
 
   constructor(protected driver: BaseDriver) {

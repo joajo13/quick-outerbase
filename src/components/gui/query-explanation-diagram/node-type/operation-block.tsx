@@ -35,7 +35,7 @@ export function OperationBlock(props: ExplainNodeProps) {
           </div>
           <div className="flex flex-row items-center">
             <div
-              className={`max-w-[200px] w-[100px] text-center  p-2 bg-gray-300 text-gray-900 ${borderColor} text-[9pt] border-2 rounded-md py-4`}
+              className={`max-w-[200px] w-[100px] text-center  p-2 bg-gray-300 text-gray-900 ${borderColor} text-[9pt] border-2 rounded-panel py-4`}
             >
               <div>
                 <small>{label}</small>

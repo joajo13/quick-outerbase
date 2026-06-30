@@ -43,7 +43,7 @@ export default function SidebarTab({ tabs }: Readonly<SidebarTabProps>) {
   const config = useStudioContext();
 
   return (
-    <div className={cn("flex h-full bg-neutral-50 dark:bg-neutral-950")}>
+    <div className={cn("flex h-full bg-neutral-100 dark:bg-black")}>
       <div className={cn("shrink-0")}>
         <div className="flex h-full flex-col gap-4 border-r border-neutral-200 p-3 dark:border-neutral-800">
           <DropdownMenu modal={false}>
@@ -60,7 +60,7 @@ export default function SidebarTab({ tabs }: Readonly<SidebarTabProps>) {
             </DropdownMenuTrigger>
             <DropdownMenuContent side="right" align="start">
               <div
-                className="m-1 mb-2 flex h-[120px] w-[250px] flex-col justify-end rounded"
+                className="m-1 mb-2 flex h-[120px] w-[250px] flex-col justify-end rounded-panel"
                 style={{
                   background: "url(/outerbase-banner.jpg)",
                   backgroundPosition: "center",
@@ -135,7 +135,7 @@ export default function SidebarTab({ tabs }: Readonly<SidebarTabProps>) {
                     className={cn(
                       "cursor flex h-10 w-10 cursor-pointer flex-col items-center justify-center gap-0.5 text-neutral-400 hover:text-neutral-900 dark:text-neutral-600 dark:hover:text-neutral-100",
                       selectedIndex === idx
-                        ? "rounded-xl bg-neutral-200 text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100"
+                        ? "rounded-panel bg-neutral-200 text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100"
                         : undefined
                     )}
                   >

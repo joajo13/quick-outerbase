@@ -30,7 +30,7 @@ export default function ColumnListEditor({
         return (
           <div
             key={idx}
-            className="px-2 bg-secondary rounded flex items-center"
+            className="px-2 bg-secondary rounded-control flex items-center"
           >
             <span className="p-1">{columnName}</span>
             {!disabled && (
@@ -50,7 +50,7 @@ export default function ColumnListEditor({
       {!disabled && (
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger>
-            <button className="p-1 bg-secondary rounded">
+            <button className="p-1 bg-secondary rounded-control">
               <LucidePlus className="w-4 h-4" />
             </button>
           </PopoverTrigger>

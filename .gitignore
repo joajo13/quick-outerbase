@@ -53,9 +53,12 @@ certificates
 /shots
 *.sqlite
 *.sqlite-journal
+*.db
 verify-sqlite.db
 dist-verify*.db
 /.dist-verify
 /.launcher-test
 launcher/_bundle.tar.gz
 .playwright-mcp
+# screenshots de prueba sueltos en la raiz (no son assets del repo)
+/*.png

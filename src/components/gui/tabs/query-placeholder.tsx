@@ -23,7 +23,7 @@ export function QueryPlaceholder({
 
   const placeholderTable = useMemo(() => {
     return (
-      <div className="relative max-h-[400px] overflow-auto rounded border">
+      <div className="relative max-h-[400px] overflow-auto rounded-panel border">
         <table className="w-full border-separate border-spacing-0 text-sm">
           <thead className="sticky top-0">
             <tr className="h-[35px] bg-secondary text-xs">

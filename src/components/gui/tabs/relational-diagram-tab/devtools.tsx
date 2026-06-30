@@ -222,7 +222,7 @@ export function DevTools() {
       <DevToolsToggle tools={tools} />
 
       {changeLoggerActive && (
-        <Panel className="text-xs p-5 bg-white rounded shadow-md overflow-y-auto max-h-[50%] mt-20" position="bottom-right">
+        <Panel className="text-xs p-5 bg-white rounded-panel shadow-md overflow-y-auto max-h-[50%] mt-20" position="bottom-right">
           <ChangeLogger />
         </Panel>
       )}

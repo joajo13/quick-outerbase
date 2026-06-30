@@ -67,7 +67,7 @@ export const localSettingDialog = createDialog(({ close }) => {
         <div className="flex flex-col gap-1">
           <label className="text-sm font-medium">Provider</label>
           <select
-            className="border-input bg-background h-9 rounded-md border px-2 text-sm"
+            className="border-input bg-background h-9 rounded-control border px-2 text-sm"
             value={provider}
             onChange={(e) => onProviderChange(e.target.value as AgentProvider)}
           >

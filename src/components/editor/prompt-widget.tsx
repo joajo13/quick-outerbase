@@ -140,7 +140,7 @@ export function CodeMirrorPromptWidget({
   };
 
   return (
-    <div className="max-w-[500px] rounded border font-sans text-base">
+    <div className="max-w-[500px] rounded-panel border font-sans text-base">
       <div className="flex">
         <div
           className="relative flex-1 overflow-hidden"
@@ -260,7 +260,7 @@ export function CodeMirrorPromptWidget({
                       {agent.name}
                       {agent.free ? (
                         <div className="flex flex-1 justify-end">
-                          <span className="bg-secondary text-secondary-foreground rounded px-2 text-sm">
+                          <span className="bg-secondary text-secondary-foreground rounded-control px-2 text-sm">
                             free tier
                           </span>
                         </div>

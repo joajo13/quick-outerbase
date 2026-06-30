@@ -217,7 +217,7 @@ function ColumnItem({
         className={cn("border-t border-b border-l")}
       >
         <div
-          className={cn("ml-1 h-[30px] w-[12px] rounded", highlightClassName)}
+          className={cn("ml-1 h-[30px] w-[12px] rounded-control", highlightClassName)}
         ></div>
       </td>
       <td className="border-t border-r border-b">
@@ -314,7 +314,7 @@ function ColumnItem({
           {!readOnly && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="rounded border p-1 shadow-sm">
+              <button className="rounded-control border p-1 shadow-sm">
                 <LucidePlus className="h-4 w-4" />
               </button>
             </DropdownMenuTrigger>
@@ -478,7 +478,7 @@ export default function SchemaEditorColumnList({
         onDragEnd={handleDragEnd}
         modifiers={[restrictToVerticalAxis]}
       >
-        <table className="w-full overflow-hidden rounded">
+        <table className="w-full overflow-hidden rounded-panel">
           <thead>
             <tr>
               <td className={cn(headerStyle, "w-[20px]")}></td>

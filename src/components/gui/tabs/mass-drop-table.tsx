@@ -39,7 +39,7 @@ function ConfirmDialog({
           You are about to drop the following tables.
           <div className="my-2 flex flex-wrap gap-2 font-mono">
             {selectedItems.map((t) => (
-              <div className="bg-muted rounded p-1" key={t.name}>
+              <div className="bg-muted rounded-control p-1" key={t.name}>
                 {t.name}
               </div>
             ))}

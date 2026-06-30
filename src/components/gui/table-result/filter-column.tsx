@@ -46,7 +46,7 @@ export default function useTableResultColumnFilter({
           <LucideSettings2 className="h-3 w-4" />
           Columns
           {!!columnFilterBadge && (
-            <span className="transform-y-[-2px] text-secondary text-secondary-foreground ml-1 h-4 w-4 rounded-[1px] border border-neutral-600 bg-neutral-700 text-[11px]">
+            <span className="transform-y-[-2px] text-secondary text-secondary-foreground ml-1 h-4 w-4 rounded-control border border-neutral-600 bg-neutral-700 text-[11px]">
               {columnFilterBadge}
             </span>
           )}
@@ -61,7 +61,7 @@ export default function useTableResultColumnFilter({
                 onClick={() => {
                   setColumnIndexList(headers.map((_, idx) => idx));
                 }}
-                className="hover:bg-secondary aria-selected:bg-accent aria-selected:text-accent-foreground relative mx-1 my-1 flex cursor-default items-center rounded-sm px-2 py-1.5 text-sm font-semibold outline-hidden select-none data-disabled:pointer-events-none data-disabled:opacity-50"
+                className="hover:bg-secondary aria-selected:bg-accent aria-selected:text-accent-foreground relative mx-1 my-1 flex cursor-default items-center rounded-control px-2 py-1.5 text-sm font-semibold outline-hidden select-none data-disabled:pointer-events-none data-disabled:opacity-50"
               >
                 <ListChecks className="mr-2 h-4 w-4" />
                 Select all columns

@@ -23,7 +23,7 @@ export default function DisplayLinkCell({ link }: { link: string }) {
         <HoverCardContent side="bottom" align="start" className="min-w-[300px]">
           <div className="flex flex-col gap-2">
             {isImage && (
-              <div className="p-2 bg-gray-600 dark:bg-gray-800 rounded justify-center items-center flex">
+              <div className="p-2 bg-gray-600 dark:bg-gray-800 rounded-control justify-center items-center flex">
                 <img
                   src={link}
                   alt=""
