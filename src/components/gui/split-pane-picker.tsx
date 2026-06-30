@@ -14,7 +14,7 @@ export default function SplitPanePicker({
   createMenu,
   onPickExisting,
   onCancel,
-}: SplitPanePickerProps) {
+}: SplitPanePickerProps): JSX.Element {
   return (
     <div className="relative flex h-full w-full flex-col items-center justify-center gap-6 bg-white p-6 dark:bg-neutral-950">
       <button
@@ -29,9 +29,9 @@ export default function SplitPanePicker({
         <div className="text-xs font-medium tracking-wide text-neutral-500 uppercase">
           New
         </div>
-        {createMenu.map((item, idx) => (
+        {createMenu.map((item) => (
           <button
-            key={idx}
+            key={item.text}
             onClick={item.onClick}
             className="flex items-center gap-2 rounded-panel border border-neutral-200 px-3 py-2 text-left text-sm transition hover:bg-neutral-100 dark:border-neutral-800 dark:hover:bg-neutral-900"
           >
