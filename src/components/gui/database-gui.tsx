@@ -204,12 +204,17 @@ export default function DatabaseGui() {
   }, [tabs, selectedTabIndex, previousLogTabKey]);
 
   return (
-    <div className={cn("flex h-screen w-screen flex-col", containerClassName)}>
+    <div
+      className={cn(
+        "flex h-screen w-screen flex-col bg-neutral-100 dark:bg-black",
+        containerClassName
+      )}
+    >
       <ResizablePanelGroup direction="horizontal">
         <ResizablePanel minSize={5} defaultSize={defaultWidthPercentage}>
           <SidebarTab tabs={sidebarTabs} />
         </ResizablePanel>
-        <ResizableHandle withHandle />
+        <ResizableHandle withHandle className="bg-transparent" />
         <ResizablePanel defaultSize={100 - defaultWidthPercentage}>
           <WindowTabs
             menu={tabSideMenu}
