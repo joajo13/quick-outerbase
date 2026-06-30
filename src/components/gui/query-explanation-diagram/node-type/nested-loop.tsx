@@ -42,7 +42,7 @@ export function NestedLoop(props: ExplainNodeProps) {
             <small>{formatCost(props.data.cost_info.prefix_cost)}</small>
           </div>
         </div>
-        <div className="w-[50px] h-[50px] rotate-45 p-2 bg-secondary text-muted-foreground text-[9pt] border-b rounded-md overflow-hidden text-center my-2 mx-2">
+        <div className="w-[50px] h-[50px] rotate-45 p-2 bg-secondary text-muted-foreground text-[9pt] border-b rounded-panel overflow-hidden text-center my-2 mx-2">
           <div className="-rotate-45">
             <small>{props.data.label}</small>
           </div>

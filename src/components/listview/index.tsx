@@ -148,6 +148,7 @@ function renderList<T>(props: ListViewRendererProps<T>): React.ReactElement {
             <React.Fragment key={item.key}>
               <div
                 key={item.key}
+                className="px-4"
                 onContextMenu={() => {
                   stopParentPropagation.current = true;
                   setContextMenuKey(item.key);
@@ -166,7 +167,7 @@ function renderList<T>(props: ListViewRendererProps<T>): React.ReactElement {
               >
                 <div
                   className={cn(
-                    "flex h-8 items-center gap-0.5 px-4 text-sm text-neutral-500",
+                    "flex h-8 items-center gap-0.5 rounded-control px-3 text-sm text-neutral-500",
                     selectedKey === item.key
                       ? "bg-neutral-200 text-black dark:bg-neutral-800 dark:text-white"
                       : "hover:bg-neutral-100 dark:hover:bg-neutral-900",
@@ -205,7 +206,7 @@ function renderList<T>(props: ListViewRendererProps<T>): React.ReactElement {
                     {item.badgeContent && (
                       <span
                         className={cn(
-                          "ml-1 rounded p-0.5 px-1 font-mono text-sm font-normal",
+                          "ml-1 rounded-control p-0.5 px-1 font-mono text-sm font-normal",
                           item.badgeClassName ?? "bg-red-500 text-white"
                         )}
                       >
@@ -217,7 +218,7 @@ function renderList<T>(props: ListViewRendererProps<T>): React.ReactElement {
                   {item.progressBarValue && item.progressBarMax && (
                     <div className="text-muted-foreground relative flex h-full w-[50px] items-center">
                       <div
-                        className="h-[20px] rounded-sm border border-neutral-200 bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-800"
+                        className="h-[20px] rounded-control border border-neutral-200 bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-800"
                         style={{
                           width:
                             Math.max(
@@ -286,7 +287,7 @@ export function ListView<T = unknown>(props: ListViewProps<T>) {
             setContextMenuKey("");
           }}
         >
-          <div className={"flex flex-col gap-0"}>
+          <div className={"flex flex-col gap-0.5"}>
             {renderList({
               ...rest,
               depth: 0,

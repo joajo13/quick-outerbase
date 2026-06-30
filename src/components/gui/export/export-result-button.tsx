@@ -405,7 +405,7 @@ export default function ExportResultButton({
                 <div className="mt-2 flex flex-col space-y-2">
                   <div className="flex items-center space-x-4">
                     <span className="w-[120px] text-sm">Field separator:</span>
-                    <div className="flex h-[28px] w-[120px] items-center rounded-md bg-white px-3 py-2.5 text-base text-neutral-900 outline outline-1 outline-neutral-200 focus:outline-neutral-400/70 dark:bg-neutral-900 dark:text-white dark:outline-neutral-800 dark:focus:outline-neutral-600">
+                    <div className="flex h-[28px] w-[120px] items-center rounded-control bg-white px-3 py-2.5 text-base text-neutral-900 outline outline-1 outline-neutral-200 focus:outline-neutral-400/70 dark:bg-neutral-900 dark:text-white dark:outline-neutral-800 dark:focus:outline-neutral-600">
                       <input
                         disabled={exportSetting.format !== "delimited"}
                         type="text"
@@ -425,7 +425,7 @@ export default function ExportResultButton({
                   </div>
                   <div className="flex items-center space-x-4">
                     <span className="w-[120px] text-sm">Line terminator:</span>
-                    <div className="flex h-[28px] w-[120px] items-center rounded-md bg-white px-3 py-2.5 text-base text-neutral-900 outline outline-1 outline-neutral-200 focus:outline-neutral-400/70 dark:bg-neutral-900 dark:text-white dark:outline-neutral-800 dark:focus:outline-neutral-600">
+                    <div className="flex h-[28px] w-[120px] items-center rounded-control bg-white px-3 py-2.5 text-base text-neutral-900 outline outline-1 outline-neutral-200 focus:outline-neutral-400/70 dark:bg-neutral-900 dark:text-white dark:outline-neutral-800 dark:focus:outline-neutral-600">
                       <input
                         disabled={exportSetting.format !== "delimited"}
                         type="text"
@@ -446,7 +446,7 @@ export default function ExportResultButton({
 
                   <div className="flex items-center space-x-4">
                     <span className="w-[120px] text-sm">Encloser:</span>
-                    <div className="flex h-[28px] w-[120px] items-center rounded-md bg-white px-3 py-2.5 text-base text-neutral-900 outline outline-1 outline-neutral-200 focus:outline-neutral-400/70 dark:bg-neutral-900 dark:text-white dark:outline-neutral-800 dark:focus:outline-neutral-600">
+                    <div className="flex h-[28px] w-[120px] items-center rounded-control bg-white px-3 py-2.5 text-base text-neutral-900 outline outline-1 outline-neutral-200 focus:outline-neutral-400/70 dark:bg-neutral-900 dark:text-white dark:outline-neutral-800 dark:focus:outline-neutral-600">
                       <input
                         disabled={exportSetting.format !== "delimited"}
                         type="text"
@@ -466,7 +466,7 @@ export default function ExportResultButton({
                   </div>
                   <div className="flex items-center space-x-4">
                     <span className="w-[120px] text-sm">NULL Value:</span>
-                    <div className="flex h-[28px] w-[120px] items-center rounded-md bg-white px-3 py-2.5 text-base text-neutral-900 outline outline-1 outline-neutral-200 focus:outline-neutral-400/70 dark:bg-neutral-900 dark:text-white dark:outline-neutral-800 dark:focus:outline-neutral-600">
+                    <div className="flex h-[28px] w-[120px] items-center rounded-control bg-white px-3 py-2.5 text-base text-neutral-900 outline outline-1 outline-neutral-200 focus:outline-neutral-400/70 dark:bg-neutral-900 dark:text-white dark:outline-neutral-800 dark:focus:outline-neutral-600">
                       <input
                         type="text"
                         className="flex-1 bg-transparent text-sm font-light outline-hidden"

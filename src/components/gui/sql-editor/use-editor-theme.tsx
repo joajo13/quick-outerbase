@@ -11,17 +11,24 @@ export default function useCodeEditorTheme({
   const { resolvedTheme, forcedTheme } = useTheme();
 
   return useMemo(() => {
-    if ((forcedTheme ?? resolvedTheme) === "light") {
+    // Sin ThemeProvider en el flujo activo, resolvedTheme/forcedTheme quedan
+    // undefined; defaulteamos a "light" para que el editor use su paleta clara
+    // (diseñada para el fondo blanco) en lugar de la oscura.
+    if ((forcedTheme ?? resolvedTheme ?? "light") === "light") {
       return createTheme({
         theme: "light",
         settings: {
           background: "#FFFFFF",
-          foreground: "#000000",
+          // Texto base (tokens sin highlight) en gris claro, legible sobre blanco.
+          foreground: "#6b7280",
           caret: "#FBAC52",
           selection: "#FFD420",
           selectionMatch: "#FFD420",
           gutterBackground: "#fff",
-          gutterForeground: "#4D4D4C",
+          // Contadores de línea en azul medianamente oscuro; la línea activa un
+          // tono más oscuro para destacar.
+          gutterForeground: "#1d4ed8",
+          gutterActiveForeground: "#1e3a8a",
           gutterBorder: "transparent",
           lineHighlight: "var(--accent)",
           fontSize: fontSize + "rem",

@@ -307,7 +307,7 @@ function getCursorTooltips(
         arrow: false,
         create: () => {
           const dom = document.createElement("div");
-          dom.className = "rounded overflow-hidden border border-zinc-500";
+          dom.className = "rounded-control overflow-hidden border border-zinc-500";
 
           const editButton = document.createElement("button");
           editButton.className =

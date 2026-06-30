@@ -48,7 +48,7 @@ export default function ERDTableColumn({
         setFocus({ type: "column", table: tableName, column: column.title });
       }}
       className={cn(
-        "group relative grid h-8 grid-cols-[auto_1fr] items-center gap-1.5 border-b border-[#e7e8ea] px-2 last:border-b-0 last:rounded-b-md dark:border-[#2c2f30]",
+        "group relative grid h-8 grid-cols-[auto_1fr] items-center gap-1.5 border-b border-[#e7e8ea] px-2 last:border-b-0 last:rounded-b-panel dark:border-[#2c2f30]",
         clickable && "cursor-pointer",
         highlighted
           ? "bg-[#1ded83]/20 dark:bg-[#1ded83]/15"

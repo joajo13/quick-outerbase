@@ -194,10 +194,10 @@ export default function WindowTabs({
         onDragEnd={handleDragEnd}
         modifiers={[restrictToHorizontalAxis]}
       >
-        <div className="flex h-full w-full flex-col">
-          <div className="no-scrollbar shrink-0 grow-0 overflow-x-auto bg-neutral-100 dark:bg-neutral-900">
+        <div className="flex h-full w-full flex-col pl-2">
+          <div className="no-scrollbar shrink-0 grow-0 overflow-x-auto">
             <div
-              className="window-tab-scrollbar flex h-[40px]"
+              className="window-tab-scrollbar flex h-[40px] items-end gap-1.5 pr-2 pl-7"
               ref={tabContainerRef}
             >
               <SortableContext
@@ -207,8 +207,6 @@ export default function WindowTabs({
                 {tabs.map((tab, idx) => (
                   <SortableTab
                     key={tab.key}
-                    index={idx}
-                    tabCount={tabs.length}
                     tab={tab}
                     selected={idx === selected}
                     onSelectChange={() => {
@@ -239,11 +237,11 @@ export default function WindowTabs({
                 <div
                   ref={tabMenuRef}
                   style={{ zIndex: 50, position: "sticky" }}
-                  className={`right-0 flex h-[40px] items-center border-b bg-neutral-100 dark:bg-neutral-900`}
+                  className={`right-0 flex h-[40px] items-center bg-neutral-100 dark:bg-black`}
                 >
                   <DropdownMenu modal={false}>
                     <DropdownMenuTrigger>
-                      <div className="ml-1.5 flex h-7 items-center justify-center gap-1 rounded-lg p-1.5 py-2 text-sm text-neutral-600 transition hover:bg-neutral-200 hover:text-black dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-white">
+                      <div className="ml-1.5 flex h-7 items-center justify-center gap-1 rounded-panel p-1.5 py-2 text-sm text-neutral-600 transition hover:bg-neutral-200 hover:text-black dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-white">
                         <LucidePlus className="h-4 w-4" /> New
                       </div>
                     </DropdownMenuTrigger>
@@ -263,10 +261,10 @@ export default function WindowTabs({
                 </div>
               )}
 
-              <div className="flex h-[40px] flex-1 border-b"></div>
+              <div className="h-[40px] flex-1"></div>
             </div>
           </div>
-          <div className="relative grow">
+          <div className="relative grow overflow-hidden rounded-t-panel bg-white dark:bg-neutral-950">
             {tabs.map((tab, tabIndex) => (
               <CurrentWindowTab.Provider
                 key={tab.key}

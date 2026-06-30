@@ -281,7 +281,7 @@ export default function TableDataWindow({
           </div>
 
           <div className="mx-2 flex max-w-1/3 grow">
-            <div className="flex w-full items-center overflow-hidden rounded border border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-950">
+            <div className="flex w-full items-center overflow-hidden rounded-control border border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-950">
               {filterColumnButton}
               <input
                 type="text"
@@ -404,7 +404,7 @@ export default function TableDataWindow({
                       }
                     }}
                     style={{ width: 50 }}
-                    className="h-8 rounded bg-neutral-200 p-1 pr-2 pl-2 text-xs dark:bg-neutral-900"
+                    className="h-8 rounded-control bg-neutral-200 p-1 pr-2 pl-2 text-xs dark:bg-neutral-900"
                     alt="Limit"
                   />
                 </TooltipTrigger>
@@ -431,7 +431,7 @@ export default function TableDataWindow({
                       }
                     }}
                     style={{ width: 50 }}
-                    className="h-full rounded bg-neutral-200 p-1 pr-2 pl-2 text-xs dark:bg-neutral-900"
+                    className="h-full rounded-control bg-neutral-200 p-1 pr-2 pl-2 text-xs dark:bg-neutral-900"
                     alt="Offset"
                   />
                 </TooltipTrigger>

@@ -77,7 +77,7 @@ export function TableBlock(props: ExplainNodeProps) {
           </div>
         </div>
         <div
-          className={`p-2 text-white text-[9pt] border-b rounded-md text-center ${bgColor}`}
+          className={`p-2 text-white text-[9pt] border-b rounded-panel text-center ${bgColor}`}
         >
           <small>{label}</small>
         </div>

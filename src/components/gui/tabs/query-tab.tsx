@@ -350,7 +350,7 @@ export default function QueryWindow({
     <ResizablePanelGroup direction="vertical">
       <ResizablePanel style={{ position: "relative" }}>
         <div className="absolute top-0 right-0 bottom-0 left-0 flex flex-col">
-          <div className="flex border-b bg-neutral-50 py-3 pr-1 pl-3 dark:bg-neutral-950">
+          <div className="flex border-b bg-white py-3 pr-1 pl-3 dark:bg-neutral-950">
             <div className="text-secondary-foreground flex shrink-0 items-center p-1 text-sm">
               {namespaceName} /
             </div>
@@ -366,7 +366,7 @@ export default function QueryWindow({
                 }}
                 placeholder="Please name your query"
                 spellCheck="false"
-                className="focus:border-secondary-foreground absolute top-0 right-0 bottom-0 left-0 rounded bg-transparent p-1 text-sm font-semibold outline-hidden"
+                className="focus:border-secondary-foreground absolute top-0 right-0 bottom-0 left-0 rounded-control bg-transparent p-1 text-sm font-semibold outline-hidden"
                 value={name}
                 onChange={(e) => setName(e.currentTarget.value)}
               />
@@ -473,7 +473,7 @@ export default function QueryWindow({
                 </TooltipTrigger>
                 <TooltipContent className="p-4">
                   <p className="mb-2">
-                    <span className="bg-secondary text-secondary-foreground inline-block rounded px-2 py-1">
+                    <span className="bg-secondary text-secondary-foreground inline-block rounded-control px-2 py-1">
                       {KEY_BINDING.format.toString()}
                     </span>
                   </p>

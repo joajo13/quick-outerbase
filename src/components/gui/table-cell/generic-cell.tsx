@@ -115,7 +115,7 @@ function ForeignKeyColumnSnippet(props: SneakpeakProps) {
             <button
               type="button"
               title="Ir a la tabla"
-              className="flex shrink-0 items-center gap-1 rounded border px-2 py-1 text-xs text-gray-500 hover:text-blue-600"
+              className="flex shrink-0 items-center gap-1 rounded-control border px-2 py-1 text-xs text-gray-500 hover:text-blue-600"
               onClick={() => {
                 scc.tabs.openBuiltinTable({
                   schemaName: props.fkSchemaName,
@@ -169,7 +169,7 @@ function BlobCellValue({
     return (
       <div className="flex">
         <div className="mr-2 flex-col items-center justify-center">
-          <span className="inline rounded bg-blue-500 p-1 pr-2 pl-2 text-white">
+          <span className="inline rounded-control bg-blue-500 p-1 pr-2 pl-2 text-white">
             vec({floatArray.length})
           </span>
         </div>
@@ -185,7 +185,7 @@ function BlobCellValue({
           {prettifyBytes(bytes.subarray(0, 64))}
         </span>
         <div className="ml-2 flex-col items-center justify-center">
-          <span className="inline rounded bg-blue-500 p-1 pr-2 pl-2 text-white">
+          <span className="inline rounded-control bg-blue-500 p-1 pr-2 pl-2 text-white">
             {bytes.length.toLocaleString(undefined, {
               maximumFractionDigits: 0,
             })}

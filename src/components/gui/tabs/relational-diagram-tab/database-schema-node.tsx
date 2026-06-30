@@ -42,7 +42,7 @@ export function DatabaseSchemaNode({
   const header = (
     <h2
       className={
-        "flex h-8 items-center gap-1.5 rounded-t-md border-b border-[#e7e8ea] bg-[#f0f0f0] px-2 text-sm font-medium text-[#141616] dark:border-[#2c2f30] dark:bg-[#232526] dark:text-white/70"
+        "flex h-8 items-center gap-1.5 rounded-t-panel border-b border-[#e7e8ea] bg-[#f0f0f0] px-2 text-sm font-medium text-[#141616] dark:border-[#2c2f30] dark:bg-[#232526] dark:text-white/70"
       }
     >
       <Table2 size={15} className="text-[#008543] dark:text-[#1ded83]" />
@@ -53,7 +53,7 @@ export function DatabaseSchemaNode({
   return (
     <div
       className={
-        "min-w-[180px] overflow-hidden rounded-md border bg-white shadow-[0_0_20px_0_rgba(0,0,0,0.12)] transition-all dark:bg-[#141616] dark:shadow-[0_0_20px_0_rgba(0,0,0,0.45)] " +
+        "min-w-[180px] overflow-hidden rounded-panel border bg-white shadow-[0_0_20px_0_rgba(0,0,0,0.12)] transition-all dark:bg-[#141616] dark:shadow-[0_0_20px_0_rgba(0,0,0,0.45)] " +
         (emphasized
           ? "border-[#008543] shadow-[0_0_20px_0_rgba(29,237,131,0.35)] dark:border-[#1ded83] "
           : "border-black/10 dark:border-white/20 ") +
