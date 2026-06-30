@@ -1,6 +1,14 @@
+import { generateId } from "@/lib/generate-id";
 import { BaseDriver } from "../base-driver";
-import { AgentStreamCallback } from "./base";
-import CommonAgentDriverImplementation, { CommonAgentMessage } from "./common";
+import {
+  AgentStreamCallback,
+  AgentToolCall,
+  RUN_QUERY_TOOL,
+} from "./base";
+import CommonAgentDriverImplementation, {
+  CommonAgentMessage,
+  QueryStreamResult,
+} from "./common";
 import { readSSEStream, readStreamError } from "./sse";
 
 interface AnthropicResponse {
@@ -9,12 +17,32 @@ interface AnthropicResponse {
 }
 
 // Evento SSE de Anthropic (Messages API, stream:true). El campo `type` discrimina:
-// content_block_delta trae delta.type === "text_delta" (texto) o "thinking_delta"
-// (reasoning); message_stop cierra; error reporta un fallo.
+// content_block_delta trae delta.type === "text_delta" (texto), "thinking_delta"
+// (reasoning) o "input_json_delta" (args de un tool_use); content_block_start abre un
+// bloque (tool_use trae id/name); content_block_stop lo cierra; message_stop cierra.
 interface AnthropicStreamEvent {
   type?: string;
-  delta?: { type?: string; text?: string; thinking?: string };
+  index?: number;
+  content_block?: { type?: string; id?: string; name?: string };
+  delta?: {
+    type?: string;
+    text?: string;
+    thinking?: string;
+    partial_json?: string;
+    stop_reason?: string;
+  };
   error?: { message?: string };
+}
+
+// Bloque de contenido en el formato de Anthropic (texto, tool_use o tool_result).
+type AnthropicContentBlock =
+  | { type: "text"; text: string }
+  | { type: "tool_use"; id: string; name: string; input: Record<string, unknown> }
+  | { type: "tool_result"; tool_use_id: string; content: string };
+
+interface AnthropicMessage {
+  role: string;
+  content: string | AnthropicContentBlock[];
 }
 
 // Presupuesto de "extended thinking" para que Claude exponga su razonamiento en el
@@ -39,15 +67,69 @@ export class AnthropicDriver extends CommonAgentDriverImplementation {
     super(driver);
   }
 
-  async query(messages: CommonAgentMessage[]): Promise<string> {
-    // Separar el system (Anthropic lo quiere top-level) del resto.
+  // Separa el system (Anthropic lo quiere top-level) y traduce el historial al
+  // formato de Anthropic: assistant con toolCalls → bloques tool_use; turnos "tool"
+  // → user con bloque tool_result (coalescamos tool_results consecutivos en un solo
+  // user message, como exige la API cuando hubo varios tool_use en un turno).
+  private toAnthropicMessages(messages: CommonAgentMessage[]): {
+    systemText: string;
+    chatMessages: AnthropicMessage[];
+  } {
     const systemText = messages
       .filter((m) => m.role === "system")
       .map((m) => m.content)
       .join("\n\n");
-    const chatMessages = messages
-      .filter((m) => m.role === "user" || m.role === "assistant")
-      .map((m) => ({ role: m.role, content: m.content }));
+
+    const chatMessages: AnthropicMessage[] = [];
+    for (const m of messages) {
+      if (m.role === "system") continue;
+
+      if (m.role === "tool") {
+        const block: AnthropicContentBlock = {
+          type: "tool_result",
+          tool_use_id: m.toolCallId ?? "",
+          content: m.content,
+        };
+        const last = chatMessages[chatMessages.length - 1];
+        if (
+          last &&
+          last.role === "user" &&
+          Array.isArray(last.content) &&
+          last.content[0]?.type === "tool_result"
+        ) {
+          last.content.push(block);
+        } else {
+          chatMessages.push({ role: "user", content: [block] });
+        }
+        continue;
+      }
+
+      if (m.role === "assistant" && m.toolCalls && m.toolCalls.length > 0) {
+        const content: AnthropicContentBlock[] = [];
+        if (m.content) content.push({ type: "text", text: m.content });
+        for (const tc of m.toolCalls) {
+          content.push({
+            type: "tool_use",
+            id: tc.id,
+            name: tc.name,
+            input: tc.args,
+          });
+        }
+        chatMessages.push({ role: "assistant", content });
+        continue;
+      }
+
+      // user o assistant plano. Saltamos assistant vacíos (Anthropic rechaza
+      // bloques de texto vacíos) — puede pasar en el fallback con historial de tools.
+      if (m.role === "assistant" && !m.content) continue;
+      chatMessages.push({ role: m.role, content: m.content });
+    }
+
+    return { systemText, chatMessages };
+  }
+
+  async query(messages: CommonAgentMessage[]): Promise<string> {
+    const { systemText, chatMessages } = this.toAnthropicMessages(messages);
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -75,20 +157,17 @@ export class AnthropicDriver extends CommonAgentDriverImplementation {
     return text;
   }
 
-  // Streaming SSE (stream:true) con reasoning best-effort. Separa el system top-level
-  // igual que query(), pide thinking, y parsea content_block_delta → text/reasoning.
-  // Si la respuesta no es ok, tira para que chatStream caiga al fallback. No toca query().
+  // Streaming SSE (stream:true). Separa el system top-level y parsea content_block_delta
+  // → text/reasoning/tool_use. Con tools activas NO pedimos thinking: extended thinking
+  // exige reenviar los bloques de razonamiento en los turnos con tool_use, que no
+  // guardamos en el historial; desactivarlo evita ese requisito. Si la respuesta no es
+  // ok, tira para que chatStream caiga al fallback. No toca query().
   async queryStream(
     messages: CommonAgentMessage[],
-    onEvent: AgentStreamCallback
-  ): Promise<string> {
-    const systemText = messages
-      .filter((m) => m.role === "system")
-      .map((m) => m.content)
-      .join("\n\n");
-    const chatMessages = messages
-      .filter((m) => m.role === "user" || m.role === "assistant")
-      .map((m) => ({ role: m.role, content: m.content }));
+    onEvent: AgentStreamCallback,
+    enableTools: boolean
+  ): Promise<QueryStreamResult> {
+    const { systemText, chatMessages } = this.toAnthropicMessages(messages);
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -102,9 +181,24 @@ export class AnthropicDriver extends CommonAgentDriverImplementation {
         model: this.model,
         max_tokens: STREAM_MAX_TOKENS,
         stream: true,
-        // Reasoning opt-in (best-effort). Con thinking activado, Anthropic exige
-        // temperature por defecto (=1), por eso NO la seteamos.
-        thinking: { type: "enabled", budget_tokens: THINKING_BUDGET_TOKENS },
+        ...(enableTools
+          ? {
+              tools: [
+                {
+                  name: RUN_QUERY_TOOL.name,
+                  description: RUN_QUERY_TOOL.description,
+                  input_schema: RUN_QUERY_TOOL.parameters,
+                },
+              ],
+            }
+          : // Reasoning opt-in (best-effort, solo sin tools). Con thinking activado,
+            // Anthropic exige temperature por defecto (=1), por eso NO la seteamos.
+            {
+              thinking: {
+                type: "enabled",
+                budget_tokens: THINKING_BUDGET_TOKENS,
+              },
+            }),
         ...(systemText ? { system: systemText } : {}),
         messages: chatMessages,
       }),
@@ -115,6 +209,13 @@ export class AnthropicDriver extends CommonAgentDriverImplementation {
     }
 
     let acc = "";
+    const toolCalls: AgentToolCall[] = [];
+    // Buffers de tool_use en curso, keyeados por el index del content block.
+    const toolBlocks: Record<
+      number,
+      { id: string; name: string; argsJson: string }
+    > = {};
+
     await readSSEStream(response.body, (data) => {
       let event: AnthropicStreamEvent;
       try {
@@ -129,6 +230,20 @@ export class AnthropicDriver extends CommonAgentDriverImplementation {
 
       if (event.type === "message_stop") return "stop";
 
+      // Abre un bloque tool_use: guardamos id/name y arrancamos a juntar los args.
+      if (
+        event.type === "content_block_start" &&
+        event.content_block?.type === "tool_use" &&
+        typeof event.index === "number"
+      ) {
+        toolBlocks[event.index] = {
+          id: event.content_block.id ?? generateId(),
+          name: event.content_block.name ?? RUN_QUERY_TOOL.name,
+          argsJson: "",
+        };
+        return;
+      }
+
       if (event.type === "content_block_delta" && event.delta) {
         if (event.delta.type === "text_delta" && event.delta.text) {
           acc += event.delta.text;
@@ -138,11 +253,42 @@ export class AnthropicDriver extends CommonAgentDriverImplementation {
           event.delta.thinking
         ) {
           onEvent({ type: "reasoning", delta: event.delta.thinking });
+        } else if (
+          event.delta.type === "input_json_delta" &&
+          typeof event.index === "number" &&
+          toolBlocks[event.index]
+        ) {
+          toolBlocks[event.index].argsJson += event.delta.partial_json ?? "";
         }
+        return;
+      }
+
+      // Cierra un bloque tool_use: parseamos los args y lo emitimos.
+      if (
+        event.type === "content_block_stop" &&
+        typeof event.index === "number" &&
+        toolBlocks[event.index]
+      ) {
+        const tb = toolBlocks[event.index];
+        let args: Record<string, unknown> = {};
+        try {
+          args = tb.argsJson ? JSON.parse(tb.argsJson) : {};
+        } catch {
+          args = {};
+        }
+        toolCalls.push({ id: tb.id, name: tb.name, args });
+        onEvent({
+          type: "tool_call",
+          id: tb.id,
+          name: tb.name,
+          args: tb.argsJson,
+        });
+        delete toolBlocks[event.index];
+        return;
       }
     });
 
-    return acc;
+    return { text: acc, toolCalls };
   }
 
   // Lenient: devuelve el bloque SQL si existe (text-to-SQL), si no el texto (explicar).

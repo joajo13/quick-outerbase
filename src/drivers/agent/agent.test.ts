@@ -1,5 +1,8 @@
 import { BaseDriver, DatabaseTableSchema } from "../base-driver";
-import CommonAgentDriverImplementation, { CommonAgentMessage } from "./common";
+import CommonAgentDriverImplementation, {
+  CommonAgentMessage,
+  QueryStreamResult,
+} from "./common";
 import AgentDriverList from "./list";
 import { ChatGPTDriver } from "./chatgpt";
 
@@ -24,8 +27,10 @@ class TestDriver extends CommonAgentDriverImplementation {
   }
 
   // Stub: estos tests no ejercitan el streaming (ver agent-stream.test.ts).
-  async queryStream(_messages: CommonAgentMessage[]): Promise<string> {
-    return "";
+  async queryStream(
+    _messages: CommonAgentMessage[]
+  ): Promise<QueryStreamResult> {
+    return { text: "", toolCalls: [] };
   }
 
   publicConvertTableToDDLContent(
