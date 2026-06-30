@@ -470,27 +470,28 @@ function SplitDivider({
 }) {
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
-    const startX = e.clientX;
-    const parentWidth =
-      e.currentTarget.parentElement?.getBoundingClientRect().width ?? 1;
+    const el = e.currentTarget;
+    el.setPointerCapture(e.pointerId);
+    const parentWidth = el.parentElement?.getBoundingClientRect().width ?? 1;
+    let lastX = e.clientX;
 
-    let lastX = startX;
     const onMove = (ev: PointerEvent) => {
       const deltaPercent = ((ev.clientX - lastX) / parentWidth) * 100;
       lastX = ev.clientX;
       onResize(deltaPercent);
     };
-    const onUp = () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
+    const onUp = (ev: PointerEvent) => {
+      el.releasePointerCapture(ev.pointerId);
+      el.removeEventListener("pointermove", onMove);
+      el.removeEventListener("pointerup", onUp);
     };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
+    el.addEventListener("pointermove", onMove);
+    el.addEventListener("pointerup", onUp);
   };
 
   return (
     <div
-      style={{ order, flexGrow: 0, flexShrink: 0, flexBasis: 6 }}
+      style={{ order, flexGrow: 0, flexShrink: 0, flexBasis: "6px" }}
       onPointerDown={onPointerDown}
       className="z-20 cursor-col-resize bg-neutral-100 transition-colors hover:bg-primary/40 dark:bg-black"
     />
