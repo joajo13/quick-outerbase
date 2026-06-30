@@ -1,5 +1,11 @@
 import { CSS } from "@/lib/dnd-kit";
 import { cn } from "@/lib/utils";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import { useSortable } from "@dnd-kit/sortable";
 import { LucideIcon, LucideX } from "lucide-react";
 import { forwardRef } from "react";
@@ -11,6 +17,8 @@ interface SortableTabProps {
   selected: boolean;
   onSelectChange: () => void;
   onClose?: () => void;
+  onSplit?: () => void;
+  splitMarked?: boolean;
 }
 
 type WindowTabItemButtonProps = ButtonProps & {
@@ -19,6 +27,7 @@ type WindowTabItemButtonProps = ButtonProps & {
   icon: LucideIcon;
   onClose?: () => void;
   isDragging?: boolean;
+  splitMarked?: boolean;
 };
 
 export const WindowTabItemButton = forwardRef<
@@ -31,6 +40,7 @@ export const WindowTabItemButton = forwardRef<
     title,
     onClose,
     isDragging,
+    splitMarked,
     ...rest
   } = props;
 
@@ -49,6 +59,12 @@ export const WindowTabItemButton = forwardRef<
     >
       <Icon className="h-4 w-4 shrink-0 grow-0" />
       <div className="line-clamp-1 grow px-2">{title}</div>
+      {splitMarked && !selected && (
+        <span
+          className="mr-1 h-1.5 w-1.5 shrink-0 rounded-full bg-primary/70"
+          title="Visible en un panel del split"
+        />
+      )}
       {onClose && (
         <div
           className={cn(
@@ -72,6 +88,8 @@ export function SortableTab({
   selected,
   onSelectChange,
   onClose,
+  onSplit,
+  splitMarked,
 }: SortableTabProps) {
   const {
     attributes,
@@ -87,7 +105,7 @@ export function SortableTab({
     transition,
   };
 
-  return (
+  const button = (
     <WindowTabItemButton
       ref={setNodeRef}
       icon={tab.icon}
@@ -95,10 +113,22 @@ export function SortableTab({
       onClick={onSelectChange}
       selected={selected}
       onClose={onClose}
+      splitMarked={splitMarked}
       style={style}
       isDragging={isDragging}
       {...attributes}
       {...listeners}
     />
+  );
+
+  if (!onSplit) return button;
+
+  return (
+    <ContextMenu modal={false}>
+      <ContextMenuTrigger asChild>{button}</ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem onClick={onSplit}>Split tab</ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
