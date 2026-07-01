@@ -23,8 +23,25 @@ import { normalizedPathname, sendAnalyticEvents } from "@/lib/tracking";
 import { cn } from "@/lib/utils";
 import { Binoculars, GearSix, Table } from "@phosphor-icons/react";
 import SavedDocTab from "./sidebar/saved-doc-tab";
+import ChatPanel from "./tabs/chat-tab";
+import { ChatProvider, useChatLayout } from "./tabs/chat-provider";
+
+// Ancho por defecto (px) del panel lateral del chat cuando no hay uno guardado.
+const CHAT_DEFAULT_WIDTH = 400;
+const CHAT_WIDTH_KEY = "chat-side-width";
 
 export default function DatabaseGui() {
+  // El ChatProvider envuelve todo el layout: el panel lateral y el tab de pantalla
+  // completa son dos vistas de la MISMA conversación (el estado vive acá arriba, no
+  // se reinicia al alternar entre lateral y full).
+  return (
+    <ChatProvider>
+      <DatabaseGuiInner />
+    </ChatProvider>
+  );
+}
+
+function DatabaseGuiInner() {
   const DEFAULT_WIDTH = 300;
 
   const [defaultWidthPercentage, setDefaultWidthPercentage] = useState(25);
@@ -35,6 +52,27 @@ export default function DatabaseGui() {
 
   const { databaseDriver, docDriver, extensions, containerClassName } =
     useStudioContext();
+
+  // Estado de layout del chat: openChat() lo abre en lateral (default).
+  const { mode: chatMode, openChat } = useChatLayout();
+
+  // Ancho del panel lateral del chat (en %), persistido en localStorage. Lo leemos en
+  // un effect para no romper la hidratación; el panel sólo se monta tras interacción
+  // (mode==="side"), así que el valor ya está listo cuando aparece.
+  const [chatSizePercentage, setChatSizePercentage] = useState(30);
+  useEffect(() => {
+    const saved = Number(localStorage.getItem(CHAT_WIDTH_KEY));
+    if (saved >= 15 && saved <= 60) {
+      setChatSizePercentage(saved);
+    } else {
+      setChatSizePercentage((CHAT_DEFAULT_WIDTH / window.innerWidth) * 100);
+    }
+  }, []);
+  const persistChatSize = useCallback((size: number) => {
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(CHAT_WIDTH_KEY, String(Math.round(size)));
+    }
+  }, []);
 
   const [selectedTabIndex, setSelectedTabIndex] = useState(0);
   const { currentSchemaName } = useSchema();
@@ -173,12 +211,13 @@ export default function DatabaseGui() {
         : undefined,
       {
         text: "Chat",
+        // El chat abre por default en lateral; desde ahí se expande a pantalla completa.
         onClick: () => {
-          scc.tabs.openBuiltinChat({});
+          openChat();
         },
       },
     ].filter(Boolean) as { text: string; onClick: () => void }[];
-  }, [currentSchemaName, databaseDriver]);
+  }, [currentSchemaName, databaseDriver, openChat]);
 
   // Send to analytic when tab changes.
   const previousLogTabKey = useRef<string>("");
@@ -211,11 +250,19 @@ export default function DatabaseGui() {
       )}
     >
       <ResizablePanelGroup direction="horizontal">
-        <ResizablePanel minSize={5} defaultSize={defaultWidthPercentage}>
+        <ResizablePanel
+          id="sidebar"
+          order={1}
+          minSize={5}
+          defaultSize={defaultWidthPercentage}
+        >
           <SidebarTab tabs={sidebarTabs} />
         </ResizablePanel>
         <ResizableHandle withHandle className="bg-transparent" />
-        <ResizablePanel defaultSize={100 - defaultWidthPercentage}>
+        {/* Sin defaultSize: el panel principal toma el espacio remanente. Así, al abrir
+            el chat, los defaultSize de los paneles visibles suman 100 y react-resizable
+            -panels no tira el warning de "invalid layout total size". */}
+        <ResizablePanel id="main" order={2}>
           <WindowTabs
             enableSplit
             menu={tabSideMenu}
@@ -225,6 +272,27 @@ export default function DatabaseGui() {
             onTabsChange={setTabs}
           />
         </ResizablePanel>
+
+        {/* Panel lateral del chat (default al abrir). En pantalla completa (mode
+            "full") no se renderiza: el chat pasa a ser un tab dentro de WindowTabs.
+            El panel es transparente: el ChatPanel arma su propia barra de tabs +
+            content redondeado que flota sobre el fondo neutro (mismo look que el
+            área de tabs), con un espacio en lugar de una línea divisoria. */}
+        {chatMode === "side" && (
+          <>
+            <ResizableHandle withHandle className="bg-transparent" />
+            <ResizablePanel
+              id="chat"
+              order={3}
+              defaultSize={chatSizePercentage}
+              minSize={18}
+              maxSize={55}
+              onResize={persistChatSize}
+            >
+              <ChatPanel variant="side" />
+            </ResizablePanel>
+          </>
+        )}
       </ResizablePanelGroup>
     </div>
   );

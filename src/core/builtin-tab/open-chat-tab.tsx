@@ -4,7 +4,7 @@ import { createTabExtension } from "../extension-tab";
 
 // Lazy-load del Chat: arrastra el SqlEditor (CodeMirror) y solo se necesita al
 // abrir el tab, así no entra en el bundle de primer paint.
-const ChatWindow = dynamic(
+const ChatPanel = dynamic(
   () => import("@/components/gui/tabs/chat-tab"),
   {
     ssr: false,
@@ -18,11 +18,13 @@ const ChatWindow = dynamic(
 
 export const builtinOpenChatTab = createTabExtension({
   name: "chat",
-  // Singleton: una sola pestaña de Chat a la vez (igual que el ERD).
+  // Singleton: una sola pestaña de Chat a la vez (igual que el ERD). Este tab es la
+  // vista de PANTALLA COMPLETA del chat (variant="full"); el estado vive en el
+  // ChatProvider, así que comparte la conversación con el panel lateral.
   key: () => "",
   generate: () => ({
     title: "Chat",
-    component: <ChatWindow />,
+    component: <ChatPanel variant="full" />,
     icon: ChatCircle,
   }),
 });
