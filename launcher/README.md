@@ -1,59 +1,60 @@
 # quick-outerbase
 
-**Una GUI de base de datos en tu terminal.** Tomá un `DATABASE_URL` y levantá una **UI web
-local** para explorar, consultar y editar tu base con **un comando**, en segundos.
-Alternativa open-source y multi-motor a **Prisma Studio**, **Drizzle Studio**, **DbGate**,
-**TablePlus** y **Outerbase Studio**.
+**A database GUI in your terminal.** Give it a `DATABASE_URL` and spin up a **local web
+UI** to browse, query and edit your database with **one command**, in seconds.
+An open-source, multi-engine alternative to **Prisma Studio**, **Drizzle Studio**,
+**DbGate**, **TablePlus** and **Outerbase Studio**.
 
 ```bash
-npx quick-outerbase --url "postgresql://user:pass@host:5432/midb?schema=public"
+npx quick-outerbase --url "postgresql://user:pass@host:5432/mydb?schema=public"
 ```
 
-**Motores:** PostgreSQL · MySQL/MariaDB · SQLite · libSQL/Turso · **DynamoDB**.
+**Engines:** PostgreSQL · MySQL/MariaDB · SQLite · libSQL/Turso · **DynamoDB**.
 
-Es un **launcher fino** (cero dependencias): no compila nada en tu máquina. Detecta tu
-plataforma, baja **una sola vez** un runtime precompilado (`standalone`, ~28 MB) desde
-GitHub Releases, lo cachea y arranca. Primer run: segundos. Siguientes: instantáneo.
+It's a **thin launcher** (zero dependencies): it compiles nothing on your machine. It
+detects your platform, downloads a precompiled runtime (`standalone`, ~28 MB) from
+GitHub Releases **once**, caches it and starts. First run: seconds. Subsequent runs:
+instant.
 
-> ⚠️ **Fork no oficial de la comunidad.** No está afiliado ni respaldado por Outerbase.
-> Fork de [Outerbase Studio](https://github.com/outerbase/studio), bajo **AGPL-3.0**.
-> Código fuente completo: https://github.com/joajo13/quick-outerbase
+> ⚠️ **Unofficial community fork.** Not affiliated with or endorsed by Outerbase.
+> Fork of [Outerbase Studio](https://github.com/outerbase/studio), under **AGPL-3.0**.
+> Full source code: https://github.com/joajo13/quick-outerbase
 
-## Uso
+## Usage
 
 ```bash
-# PostgreSQL  (?schema= estilo Prisma → search_path)
+# PostgreSQL  (Prisma-style ?schema= → search_path)
 npx quick-outerbase --url "postgresql://user:pass@host:5432/db?schema=public"
 
 # MySQL / MariaDB
 npx quick-outerbase --url "mysql://user:pass@host:3306/db"
 
 # Turso / libSQL
-npx quick-outerbase --url "libsql://mi-db.turso.io?authToken=XXXX"
+npx quick-outerbase --url "libsql://my-db.turso.io?authToken=XXXX"
 
-# SQLite  (el path relativo se resuelve contra tu carpeta actual)
-npx quick-outerbase --url "file:./datos.sqlite"
+# SQLite  (relative paths resolve against your current folder)
+npx quick-outerbase --url "file:./data.sqlite"
 
-# DynamoDB  (las creds NO van en la URL: las resuelve el server desde la cadena AWS)
+# DynamoDB  (credentials do NOT go in the URL: the server resolves them from the AWS chain)
 AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... \
   npx quick-outerbase --url "dynamodb://us-east-1"
 ```
 
-También podés pasar el URL por la env `DATABASE_URL`. Flags: `--port <n>` (default 3008),
-`--no-open` (no abrir el browser). Al cortar con **Ctrl+C**, libera el puerto sin zombies.
+You can also pass the URL via the `DATABASE_URL` env var. Flags: `--port <n>` (default 3008),
+`--no-open` (don't open the browser). On **Ctrl+C**, it frees the port with no zombies.
 
-## Requisitos
+## Requirements
 
-- **Node 20.9+** y `tar` en el PATH (Windows 10+ lo trae como `tar.exe`).
-- Plataformas con runtime precompilado: `win32-x64`, `linux-x64`.
-  Para otras (incluido macOS), corré desde el código: `npx github:joajo13/quick-outerbase --url "..."`.
+- **Node 20.9+** and `tar` on the PATH (Windows 10+ ships it as `tar.exe`).
+- Platforms with a precompiled runtime: `win32-x64`, `linux-x64`.
+  For others (macOS included), run from source: `npx github:joajo13/quick-outerbase --url "..."`.
 
-## Variables de entorno útiles
+## Useful environment variables
 
-- `QUICK_OUTERBASE_CACHE` — dónde cachear el runtime (default `~/.cache/quick-outerbase`).
-- `QUICK_OUTERBASE_BUNDLE` — usar un `.tar.gz` local en vez de descargar (offline/testing).
+- `QUICK_OUTERBASE_CACHE` — where to cache the runtime (default `~/.cache/quick-outerbase`).
+- `QUICK_OUTERBASE_BUNDLE` — use a local `.tar.gz` instead of downloading (offline/testing).
 
-## Licencia
+## License
 
-**AGPL-3.0-only.** Fork de Outerbase Studio (se conserva la licencia y la atribución).
-Ver [`LICENSE`](./LICENSE) y [`AVISO_LICENCIA.md`](./AVISO_LICENCIA.md).
+**AGPL-3.0-only.** Fork of Outerbase Studio (license and attribution preserved).
+See [`LICENSE`](./LICENSE) and [`AVISO_LICENCIA.md`](./AVISO_LICENCIA.md).
