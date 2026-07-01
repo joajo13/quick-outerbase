@@ -464,6 +464,16 @@ export default function ChatPanel({
     [send, pendingRun, resolvePending]
   );
 
+  // Fade en el tope del área scrolleable: el contenido se desvanece a transparente
+  // contra el borde superior en vez de cortar seco. Al usar mask (no un overlay de
+  // color) funde contra lo que haya detrás — el blanco del panel en lateral, el fondo
+  // de la app en full — sin hardcodear colores. El tramo es más largo en pantalla
+  // completa para que el contenido pase por detrás de los botones flotantes; en lateral
+  // alcanza con un fade corto que lo funde con la barra de tabs.
+  const scrollFadeMask = `linear-gradient(to bottom, transparent 0, black ${
+    variant === "full" ? "3.5rem" : "1.5rem"
+  })`;
+
   // Pantalla completa: botones flotantes sobre la conversación centrada. El wrapper no
   // captura clicks (pointer-events-none) para no tapar el scroll; sólo los botones sí.
   const floatingHeader = (
@@ -548,6 +558,10 @@ export default function ChatPanel({
           // en lateral la barra de tabs ya ocupa su espacio en el flujo.
           variant === "full" && "pt-14"
         )}
+        style={{
+          WebkitMaskImage: scrollFadeMask,
+          maskImage: scrollFadeMask,
+        }}
       >
         {messages.length === 0 && (
           <div className="flex grow flex-col items-center justify-center gap-4 text-center">
