@@ -17,6 +17,7 @@ import {
   Copy,
   Key,
   Lightning,
+  Play,
   Plus,
   Robot,
   Sparkle,
@@ -294,6 +295,80 @@ function GhostButton({
   );
 }
 
+// Hint de atajo de teclado. Chiquito, monoespaciado; `tone` ajusta el fondo según
+// dónde se apoya (sobre el botón primario o sobre neutro).
+function Kbd({
+  children,
+  tone = "neutral",
+}: {
+  children: React.ReactNode;
+  tone?: "neutral" | "onPrimary";
+}) {
+  return (
+    <kbd
+      className={cn(
+        "rounded px-1 py-0.5 font-mono text-[10px] leading-none font-normal",
+        tone === "onPrimary"
+          ? "bg-primary-foreground/20"
+          : "bg-neutral-200 dark:bg-neutral-700"
+      )}
+    >
+      {children}
+    </kbd>
+  );
+}
+
+// Barra fija de "solicitud de run": vive pegada arriba del input y aparece sólo cuando
+// hay una query esperando confirmación. Espeja el estado pendiente de la card (misma
+// acción Run/Descartar) y muestra los atajos Ctrl+Enter / Esc. Así confirmás la query
+// sin scrollear hasta la card ni tocar el mouse.
+function PendingRunBar({
+  run,
+  onRun,
+  onDiscard,
+}: {
+  run: ChatToolCall;
+  onRun: () => void;
+  onDiscard: () => void;
+}) {
+  // Preview del SQL en una línea (colapsamos saltos y espacios) para que entre en la barra.
+  const preview = run.sql?.replace(/\s+/g, " ").trim();
+  return (
+    <div className="border-primary/40 bg-primary/5 flex items-center gap-2.5 rounded-2xl border px-3 py-2">
+      <div className="bg-primary/10 text-primary flex h-7 w-7 shrink-0 items-center justify-center rounded-full">
+        <Play className="h-3.5 w-3.5" weight="fill" />
+      </div>
+      <div className="min-w-0 grow">
+        <div className="line-clamp-1 text-xs font-medium">
+          {run.reason || "Ejecutar la query propuesta"}
+        </div>
+        {preview && (
+          <div className="line-clamp-1 font-mono text-[11px] opacity-60">
+            {preview}
+          </div>
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={onRun}
+        className="bg-primary text-primary-foreground inline-flex shrink-0 items-center gap-1.5 rounded-control px-2.5 py-1.5 text-xs font-medium transition-opacity hover:opacity-90"
+      >
+        <Play className="h-3.5 w-3.5" weight="fill" />
+        Run
+        <Kbd tone="onPrimary">Ctrl ↵</Kbd>
+      </button>
+      <button
+        type="button"
+        onClick={onDiscard}
+        className="inline-flex shrink-0 items-center gap-1.5 rounded-control px-2 py-1.5 text-xs text-neutral-500 transition-colors hover:bg-neutral-200 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-white"
+      >
+        Descartar
+        <Kbd>Esc</Kbd>
+      </button>
+    </div>
+  );
+}
+
 // El chat como panel. `variant` decide sólo la cáscara (botón expandir vs contraer
 // y el ancho del input); toda la conversación vive en el ChatProvider, así que
 // lateral y pantalla completa comparten los MISMOS mensajes.
@@ -313,6 +388,7 @@ export default function ChatPanel({
     send,
     newChat,
     resolvePending,
+    pendingRun,
     dialect,
     suggestions,
     openSettings,
@@ -353,15 +429,39 @@ export default function ChatPanel({
     el.style.height = `${el.scrollHeight}px`;
   }, [input]);
 
+  // Cuando aparece una query esperando confirmación, enfocamos el textarea para que
+  // Ctrl+Enter / Esc funcionen sin tocar el mouse. Keyeamos por id (string estable):
+  // pendingRun es un objeto nuevo en cada delta del stream, enfocar en cada uno robaría
+  // el foco todo el tiempo.
+  const pendingRunId = pendingRun?.id ?? null;
+  useEffect(() => {
+    if (pendingRunId) textareaRef.current?.focus();
+  }, [pendingRunId]);
+
   const onKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      // Enter envía; Shift+Enter inserta salto de línea.
+      // Ctrl/Cmd+Enter: si hay una query esperando, la ejecuta (sin mouse). Si no hay
+      // ninguna, también sirve de atajo para enviar el mensaje.
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        if (pendingRun) resolvePending(pendingRun.id, "run");
+        else send();
+        return;
+      }
+      // Enter solo envía; Shift+Enter inserta salto de línea.
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         send();
+        return;
+      }
+      // Esc descarta la query pendiente (si la hay). Sin pendiente no lo interceptamos,
+      // para no pisar cualquier otro uso de Esc.
+      if (e.key === "Escape" && pendingRun) {
+        e.preventDefault();
+        resolvePending(pendingRun.id, "discard");
       }
     },
-    [send]
+    [send, pendingRun, resolvePending]
   );
 
   // Pantalla completa: botones flotantes sobre la conversación centrada. El wrapper no
@@ -489,11 +589,16 @@ export default function ChatPanel({
             );
           }
 
-          // Assistant: reasoning colapsable + tool chips + texto. Mientras no haya
-          // texto y el turno siga streameando, mostramos el shimmer (muta a
-          // "Razonando…" si ya llegó reasoning).
+          // Assistant: reasoning colapsable + cuerpo (texto y tool-cards intercalados
+          // EN ORDEN). Mientras no haya cuerpo y el turno siga streameando, mostramos
+          // el shimmer (muta a "Razonando…" si ya llegó reasoning).
           const hasReasoning = !!message.reasoning;
-          const showShimmer = message.streaming && !message.content;
+          const parts = message.parts ?? [];
+          const hasBody = parts.some(
+            (p) =>
+              p.type === "tool" || (p.type === "text" && p.content.trim() !== "")
+          );
+          const showShimmer = message.streaming && !hasBody;
 
           return (
             <div key={index} className="flex justify-start">
@@ -513,32 +618,34 @@ export default function ChatPanel({
                   />
                 )}
 
-                {message.toolCalls && message.toolCalls.length > 0 && (
-                  <div className="flex flex-col">
-                    {message.toolCalls.map((tc) =>
-                      tc.sql ? (
-                        <ChatToolCallCard
-                          key={tc.id}
-                          toolCall={tc}
-                          dialect={dialect}
-                          onRun={() => resolvePending(tc.id, "run")}
-                          onDiscard={() => resolvePending(tc.id, "discard")}
-                        />
-                      ) : (
-                        <ToolCallChips key={tc.id} toolCalls={[tc]} />
-                      )
-                    )}
-                  </div>
-                )}
+                {/* Cuerpo en el orden real que emitió el modelo: un texto que
+                    introduce una query queda ARRIBA de su card, no al revés. */}
+                {parts.map((part, i) => {
+                  if (part.type === "text") {
+                    if (!part.content.trim()) return null;
+                    return (
+                      <AssistantMessage
+                        key={i}
+                        content={part.content}
+                        dialect={dialect}
+                      />
+                    );
+                  }
+                  const tc = part.tool;
+                  return tc.sql ? (
+                    <ChatToolCallCard
+                      key={tc.id}
+                      toolCall={tc}
+                      dialect={dialect}
+                      onRun={() => resolvePending(tc.id, "run")}
+                      onDiscard={() => resolvePending(tc.id, "discard")}
+                    />
+                  ) : (
+                    <ToolCallChips key={tc.id} toolCalls={[tc]} />
+                  );
+                })}
 
-                {showShimmer ? (
-                  <ChatShimmer />
-                ) : (
-                  <AssistantMessage
-                    content={message.content}
-                    dialect={dialect}
-                  />
-                )}
+                {showShimmer && <ChatShimmer />}
               </div>
             </div>
           );
@@ -557,6 +664,17 @@ export default function ChatPanel({
               : { width: "100%" }
           }
         >
+          {/* Solicitud de run fija arriba del input: cuando el asistente propone una
+              query, la confirmás/descartás desde acá sin scrollear ni buscar la card.
+              Espeja el estado de la card (misma resolvePending) y suma los atajos. */}
+          {pendingRun && (
+            <PendingRunBar
+              run={pendingRun}
+              onRun={() => resolvePending(pendingRun.id, "run")}
+              onDiscard={() => resolvePending(pendingRun.id, "discard")}
+            />
+          )}
+
           {/* Input estilo "pill": el textarea crece con el contenido (auto-resize)
               y el botón circular de enviar queda alineado abajo (items-end) cuando
               el texto pasa de una línea. Sin + ni micrófono: solo texto y enviar. */}

@@ -30,14 +30,23 @@ import {
 // ToolCall en la UI: el tipo lo define la card (lleva sql/estado/resultado del run).
 type ToolCall = ChatToolCall;
 
+// Cuerpo del assistant como lista ORDENADA de partes: texto y tool-calls intercalados
+// en el mismo orden en que el modelo los emitió. Antes el texto se aplanaba en un solo
+// string y las tools iban en un array aparte que se dibujaba SIEMPRE arriba del texto,
+// perdiendo el orden real (la card del run quedaba encima del texto que la introducía).
+export type ChatMessagePart =
+  | { type: "text"; content: string }
+  | { type: "tool"; tool: ToolCall };
+
 export interface ChatMessage {
   role: "user" | "assistant";
-  content: string;
+  // user: el texto tipeado. En el assistant el cuerpo vive en `parts`.
+  content?: string;
   // Razonamiento del modelo (Anthropic/Gemini con flag). Se renderiza en un bloque
   // colapsable arriba del texto. OpenAI no lo expone → queda vacío.
   reasoning?: string;
-  // Tool-calls del agente (run_query): la query propuesta + el ciclo de vida del run.
-  toolCalls?: ToolCall[];
+  // Cuerpo del assistant: texto + tool-calls en orden de emisión.
+  parts?: ChatMessagePart[];
   // El turno del assistant todavía está streameando (controla shimmer + auto-colapso).
   streaming?: boolean;
 }
@@ -61,10 +70,24 @@ function applyEvent(
   if (last.role !== "assistant") return messages;
 
   const next: ChatMessage = { ...last };
+  const parts = (next.parts ?? []).slice();
   switch (event.type) {
-    case "text":
-      next.content = (next.content || "") + event.delta;
+    case "text": {
+      // Append al último part si YA es texto; si no (p.ej. justo antes hubo un
+      // tool_call), abrimos un part de texto NUEVO → el texto que sigue cae debajo de
+      // la card, respetando el orden en que el modelo lo dijo.
+      const tail = parts[parts.length - 1];
+      if (tail && tail.type === "text") {
+        parts[parts.length - 1] = {
+          type: "text",
+          content: tail.content + event.delta,
+        };
+      } else {
+        parts.push({ type: "text", content: event.delta });
+      }
+      next.parts = parts;
       break;
+    }
     case "reasoning":
       next.reasoning = (next.reasoning || "") + event.delta;
       break;
@@ -79,9 +102,9 @@ function applyEvent(
       } catch {
         // args incompletos: executeTool igual recibe los args parseados del driver.
       }
-      next.toolCalls = [
-        ...(next.toolCalls || []),
-        {
+      parts.push({
+        type: "tool",
+        tool: {
           id: event.id,
           name: event.name,
           args: event.args,
@@ -89,14 +112,20 @@ function applyEvent(
           reason,
           status: "pending",
         },
-      ];
+      });
+      next.parts = parts;
       break;
     }
-    case "error":
-      // Si no hubo nada de texto, mostramos el error como contenido del turno.
-      next.content = next.content || "Error: " + event.message;
+    case "error": {
+      // Si el turno no alcanzó a emitir nada, mostramos el error como texto.
+      const hasBody = parts.some(
+        (p) => p.type === "tool" || (p.type === "text" && p.content.trim() !== "")
+      );
+      if (!hasBody) parts.push({ type: "text", content: "Error: " + event.message });
+      next.parts = parts;
       next.streaming = false;
       break;
+    }
     case "done":
       next.streaming = false;
       break;
@@ -164,6 +193,9 @@ interface ChatSessionValue {
   send: (overrideText?: string) => void;
   newChat: () => void;
   resolvePending: (id: string, action: "run" | "discard") => void;
+  // Query esperando confirmación (o null). La consume la barra fija sobre el input y
+  // los atajos Ctrl+Enter (run) / Esc (descartar).
+  pendingRun: ToolCall | null;
   dialect: SupportedDialect;
   suggestions: string[];
   openSettings: () => void;
@@ -301,25 +333,48 @@ export function ChatProvider({ children }: PropsWithChildren) {
     return buildChatSuggestions(tables);
   }, [currentSchema]);
 
-  // Actualiza (inmutable) una tool call por id dentro de su mensaje assistant.
+  // Actualiza (inmutable) una tool call por id dentro de su mensaje assistant. Ahora
+  // las tool calls viven como partes del cuerpo (`parts`), así que la buscamos ahí.
   const updateToolCall = useCallback(
     (id: string, patch: Partial<ToolCall>) => {
       setMessages((prev) => {
         let changed = false;
         const next = prev.map((m) => {
-          if (m.role !== "assistant" || !m.toolCalls) return m;
-          const i = m.toolCalls.findIndex((tc) => tc.id === id);
+          if (m.role !== "assistant" || !m.parts) return m;
+          const i = m.parts.findIndex(
+            (p) => p.type === "tool" && p.tool.id === id
+          );
           if (i < 0) return m;
+          const part = m.parts[i];
+          if (part.type !== "tool") return m;
           changed = true;
-          const toolCalls = m.toolCalls.slice();
-          toolCalls[i] = { ...toolCalls[i], ...patch };
-          return { ...m, toolCalls };
+          const parts = m.parts.slice();
+          parts[i] = { type: "tool", tool: { ...part.tool, ...patch } };
+          return { ...m, parts };
         });
         return changed ? next : prev;
       });
     },
     []
   );
+
+  // Query esperando confirmación del usuario (Run/Descartar). La setea executeTool
+  // cuando frena, la limpia al resolverse. Alimenta la barra fija sobre el input y los
+  // atajos de teclado; es reactiva (a diferencia de pendingResolvers, que es un ref).
+  const [pendingRunId, setPendingRunId] = useState<string | null>(null);
+
+  // La tool call pendiente, resuelta desde los mensajes por id → le da a la barra el
+  // reason/sql para mostrar. null cuando no hay ninguna esperando.
+  const pendingRun = useMemo<ToolCall | null>(() => {
+    if (!pendingRunId) return null;
+    for (const m of messages) {
+      if (m.role !== "assistant" || !m.parts) continue;
+      for (const p of m.parts) {
+        if (p.type === "tool" && p.tool.id === pendingRunId) return p.tool;
+      }
+    }
+    return null;
+  }, [pendingRunId, messages]);
 
   // La card dispara esto al tocar Run/Descartar: resuelve la promesa que dejó
   // executeTool en espera.
@@ -359,10 +414,13 @@ export function ChatProvider({ children }: PropsWithChildren) {
 
       if (mustConfirm) {
         updateToolCall(call.id, { status: "pending" });
+        setPendingRunId(call.id);
         const action = await new Promise<"run" | "discard">((resolve) => {
           pendingResolvers.current.set(call.id, resolve);
         });
         pendingResolvers.current.delete(call.id);
+        // Limpiamos el pendiente sólo si sigue siendo ESTE (defensivo ante carreras).
+        setPendingRunId((cur) => (cur === call.id ? null : cur));
         if (action === "discard") {
           updateToolCall(call.id, { status: "cancelled" });
           return {
@@ -405,9 +463,8 @@ export function ChatProvider({ children }: PropsWithChildren) {
         { role: "user", content: text },
         {
           role: "assistant",
-          content: "",
           reasoning: "",
-          toolCalls: [],
+          parts: [],
           streaming: true,
         },
       ]);
@@ -457,6 +514,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
   const newChat = useCallback(() => {
     pendingResolvers.current.forEach((resolve) => resolve("discard"));
     pendingResolvers.current.clear();
+    setPendingRunId(null);
     setMessages([]);
     setInput("");
     sessionId.current = generateId();
@@ -477,6 +535,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
       send,
       newChat,
       resolvePending,
+      pendingRun,
       dialect,
       suggestions,
       openSettings,
@@ -490,6 +549,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
       send,
       newChat,
       resolvePending,
+      pendingRun,
       dialect,
       suggestions,
       openSettings,
