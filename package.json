@@ -114,7 +114,7 @@
     "cmdk": "^1.0.4",
     "deep-equal": "^2.2.3",
     "dexie": "^4.0.8",
-    "dotenv": "^16.4.5",
+    "dotenv": "^17.4.2",
     "file-saver": "^2.0.5",
     "html-to-image": "^1.11.11",
     "immer": "^10.1.1",
